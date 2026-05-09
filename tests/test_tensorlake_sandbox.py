@@ -234,7 +234,7 @@ def test_fastmcp_tensorlake_tools_delegate_to_adapter(monkeypatch: pytest.Monkey
     fastmcp_module = types.ModuleType("mcp.server.fastmcp")
 
     class FakeFastMCP:
-        def __init__(self, _name: str, **_kwargs: Any) -> None:
+        def __init__(self, _name: str) -> None:
             pass
 
         def tool(self):

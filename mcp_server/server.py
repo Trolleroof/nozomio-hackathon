@@ -11,7 +11,7 @@ except ModuleNotFoundError as error:
         raise
 
     class FastMCP:  # type: ignore[no-redef]
-        def __init__(self, name: str, **_kwargs):
+        def __init__(self, name: str):
             self.name = name
             self.tools = {}
 
@@ -32,17 +32,7 @@ from .providers import fetch_lambda, fetch_runpod, fetch_vast, fetch_modal
 from . import deploy as deploy_module
 from . import monitor
 
-
-def _create_mcp() -> FastMCP:
-    try:
-        return FastMCP("gpu-cheapest", stateless_http=True, json_response=True)
-    except TypeError as exc:
-        if "unexpected keyword argument" not in str(exc):
-            raise
-        return FastMCP("gpu-cheapest")
-
-
-mcp = _create_mcp()
+mcp = FastMCP("gpu-cheapest", stateless_http=True, json_response=True)
 
 # In-memory state — single active deployment per server session
 _active: Optional[DeployedInstance] = None
