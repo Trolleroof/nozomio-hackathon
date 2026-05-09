@@ -6,8 +6,7 @@ export default function AgentPage() {
   return (
     <AppFrame>
       <div className="mb-8">
-        <p className="crucible-eyebrow">MCP and CLI access for personal agents</p>
-        <h1 className="mt-1 text-2xl font-medium tracking-tight">Agent access</h1>
+        <h1 className="text-2xl font-medium tracking-tight">Agent access</h1>
       </div>
       <AgentAccessPanel token={apiTokens[0]} />
     </AppFrame>
