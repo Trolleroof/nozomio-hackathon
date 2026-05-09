@@ -291,8 +291,8 @@ def list_provider_capabilities(store: CrucibleStore) -> list[dict[str, Any]]:
             "Lambda Cloud",
             configured=bool(os.environ.get("LAMBDA_CLOUD_API_KEY") or os.environ.get("LAMBDA_API_KEY")),
             supports_openai_endpoint=False,
-            credential_names=["LAMBDA_CLOUD_API_KEY"],
-            notes="Provider catalog entry only; no direct launch adapter is enabled here.",
+            credential_names=["LAMBDA_CLOUD_API_KEY", "LAMBDA_API_KEY", "LAMBDA_SSH_KEY_NAME"],
+            notes="Catalog and launch adapter are available when a Lambda API key and SSH key name are configured.",
         ),
         _provider_record(
             "CoreWeave",
