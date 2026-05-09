@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "tensorlake": {
+      "source": "tensorlakeai/tensorlake-skills",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "8d06463fb38b4f4bdca74476dc20360f4efc47ce8d7f4581f688d9dd328b1318"
+    }
+  }
+}
