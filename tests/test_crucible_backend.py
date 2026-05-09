@@ -67,7 +67,7 @@ def test_plan_requires_approval_and_records_agent_context(tmp_path: Path, monkey
         store,
         user["id"],
         "Deploy Qwen 7B cheaply. Avoid multi-GPU unless required.",
-        source="dashboard",
+        source="agent",
     )
 
     assert plan["status"] == "generated"
@@ -153,3 +153,23 @@ def test_crucible_cli_plan_approve_deploy_status(tmp_path: Path) -> None:
     assert logs[0]["message"]
     assert health["status"] == "ready"
     assert stopped["status"] == "stopped"
+
+
+def test_crucible_cli_exposes_only_backend_agent_commands(tmp_path: Path) -> None:
+    help_output = run_cli(tmp_path / "state", "crucible", "--help")
+
+    for command in [
+        "signup",
+        "plan",
+        "approve",
+        "deploy",
+        "status",
+        "logs",
+        "health",
+        "stop",
+        "providers",
+        "mcp-tools",
+        "mcp-call",
+    ]:
+        assert command in help_output
+    assert "web" not in help_output

@@ -1,10 +1,14 @@
 import json
 import os
+import subprocess
+import sys
 from pathlib import Path
 
 from anygpu.crucible import signup_user
-from anygpu.crucible_mcp import handle_tool_call
+from anygpu.crucible_mcp import handle_tool_call, list_tools
 from anygpu.crucible_store import CrucibleStore
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_mcp_plan_deploy_requires_approval_and_then_succeeds(tmp_path: Path, monkeypatch) -> None:
@@ -66,3 +70,53 @@ def test_mcp_stdio_json_shape(tmp_path: Path, monkeypatch) -> None:
     encoded = json.dumps(response)
 
     assert json.loads(encoded)["content"] == []
+
+
+def test_mcp_exposes_provider_capabilities_tool(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("ANYGPU_HOME", str(tmp_path / "state"))
+    store = CrucibleStore()
+
+    names = {tool["name"] for tool in list_tools()}
+    response = handle_tool_call(store, "crucible_list_provider_capabilities", {})
+
+    assert "crucible_list_provider_capabilities" in names
+    assert response["isError"] is False
+    assert {"Modal", "SkyPilot", "Lambda Cloud", "CoreWeave"} <= {item["provider"] for item in response["content"]}
+
+
+def test_cli_mcp_call_runs_without_web_or_import_harness(tmp_path: Path) -> None:
+    env = os.environ.copy()
+    env["ANYGPU_HOME"] = str(tmp_path / "state")
+    env["PYTHONPATH"] = str(ROOT)
+
+    user = json.loads(
+        subprocess.run(
+            [sys.executable, "-m", "anygpu", "crucible", "signup", "--email", "agent@example.com", "--password", "pw"],
+            cwd=ROOT,
+            env=env,
+            text=True,
+            capture_output=True,
+            check=True,
+        ).stdout
+    )
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "anygpu",
+            "crucible",
+            "mcp-call",
+            "crucible_plan_deployment",
+            "--arguments-json",
+            json.dumps({"userId": user["id"], "prompt": "Deploy Qwen 7B cheaply", "sourceAgent": "cli-agent"}),
+        ],
+        cwd=ROOT,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    response = json.loads(result.stdout)
+    assert response["isError"] is False
+    assert response["content"]["source"] == "cli-agent"
