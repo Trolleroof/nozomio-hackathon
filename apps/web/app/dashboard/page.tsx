@@ -15,9 +15,7 @@ export default function DashboardPage() {
       <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
           <p className="crucible-eyebrow">Authenticated demo workspace</p>
-          <h1 className="mt-1 text-3xl font-semibold tracking-tight">
-            <span className="crucible-gradient-text">Dashboard</span>
-          </h1>
+          <h1 className="mt-1 text-2xl font-medium tracking-tight">Dashboard</h1>
         </div>
         <Link
           href="/deployments/new"
@@ -29,7 +27,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
-        <section className="crucible-card-feature md:col-span-2">
+        <section className="crucible-card md:col-span-2">
           <div className="flex items-center justify-between gap-4">
             <h2 className="text-lg font-semibold tracking-tight">Active deployments</h2>
             <span className="text-sm text-muted-foreground">{readyCount} healthy</span>

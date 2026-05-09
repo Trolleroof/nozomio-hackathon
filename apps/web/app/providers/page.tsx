@@ -7,7 +7,7 @@ export default function ProvidersPage() {
     <AppFrame>
       <div className="mb-8">
         <p className="crucible-eyebrow">Capability only, no provider deploy buttons</p>
-        <h1 className="mt-1 text-3xl font-semibold tracking-tight">Provider status</h1>
+        <h1 className="mt-1 text-2xl font-medium tracking-tight">Provider status</h1>
       </div>
       <ProviderMatrix providers={providerCapabilities} />
     </AppFrame>

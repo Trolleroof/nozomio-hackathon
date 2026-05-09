@@ -16,7 +16,7 @@ export default function DeploymentDetailPage() {
       <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
         <div>
           <p className="crucible-eyebrow">{deployment.provider} on {deployment.accelerator}</p>
-          <h1 className="mt-1 text-3xl font-semibold tracking-tight">{deployment.name}</h1>
+          <h1 className="mt-1 text-2xl font-medium tracking-tight">{deployment.name}</h1>
           <p className="mt-2 text-sm text-muted-foreground">Updated {formatDateTime(deployment.updatedAt)}</p>
         </div>
         <StatusBadge status={deployment.status} />

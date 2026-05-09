@@ -5,20 +5,20 @@
 :root {
   color-scheme: dark;
   --background: 10 10 10;
-  --foreground: 246 241 231;
-  --muted: 22 21 20;
-  --muted-foreground: 168 158 142;
-  --surface: 18 17 16;
-  --surface-raised: 28 26 23;
-  --code: 6 6 6;
-  --border: 60 53 44;
-  --border-strong: 92 80 64;
-  --accent: 238 109 35;
-  --accent-hover: 255 139 52;
-  --accent-foreground: 24 12 6;
-  --forge: 248 199 72;
-  --ember: 238 75 54;
-  --success: 190 190 96;
+  --foreground: 237 232 222;
+  --muted: 18 17 16;
+  --muted-foreground: 142 134 122;
+  --surface: 16 15 14;
+  --surface-raised: 24 22 20;
+  --code: 8 8 7;
+  --border: 38 34 30;
+  --border-strong: 64 56 47;
+  --accent: 232 104 38;
+  --accent-hover: 247 122 56;
+  --accent-foreground: 16 8 4;
+  --forge: 232 178 78;
+  --ember: 224 78 56;
+  --success: 168 178 96;
 }
 
 body {
@@ -26,11 +26,9 @@ body {
   background: rgb(var(--background));
   color: rgb(var(--foreground));
   font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
-  font-feature-settings: "rlig" 1, "calt" 1;
-  background-image:
-    radial-gradient(1100px 600px at 85% -10%, rgb(var(--ember) / 0.07), transparent 60%),
-    radial-gradient(900px 500px at -10% 110%, rgb(var(--forge) / 0.05), transparent 60%);
-  background-attachment: fixed;
+  font-feature-settings: "rlig" 1, "calt" 1, "ss01" 1;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 * {
@@ -56,7 +54,7 @@ pre {
 }
 
 ::selection {
-  background: rgb(var(--accent) / 0.35);
+  background: rgb(var(--accent) / 0.32);
   color: rgb(var(--foreground));
 }
 
@@ -69,43 +67,57 @@ select option {
   color: rgb(var(--foreground));
 }
 
+@keyframes flicker-a {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+@keyframes flicker-b {
+  0%, 49% { opacity: 0; }
+  50%, 100% { opacity: 1; }
+}
+
+@keyframes ember-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+
+.flame-a { animation: flicker-a 0.6s steps(1, end) infinite; }
+.flame-b { animation: flicker-b 0.6s steps(1, end) infinite; }
+.ember-pulse { animation: ember-pulse 2.6s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .flame-a, .flame-b, .ember-pulse { animation: none; }
+  .flame-b { opacity: 0; }
+}
+
 @layer components {
   .crucible-shell {
     @apply min-h-screen bg-background text-foreground;
   }
 
   .crucible-sidebar {
-    @apply border-b border-border bg-muted md:w-64 md:border-b-0 md:border-r;
+    @apply border-b border-border bg-background md:w-60 md:border-b-0 md:border-r;
   }
 
   .crucible-sidebar-link {
-    @apply inline-flex min-h-10 items-center gap-2 rounded-md border-l-2 border-transparent px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-surface-raised hover:text-foreground md:flex;
+    @apply flex min-h-9 items-center gap-2.5 rounded-md px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-surface-raised hover:text-foreground;
   }
 
   .crucible-sidebar-link-active {
-    @apply border-accent bg-surface-raised text-foreground;
+    @apply bg-surface-raised text-foreground;
   }
 
   .crucible-card {
-    @apply rounded-lg border border-border bg-surface p-5 text-foreground shadow-[inset_0_1px_0_rgb(255_255_255_/_0.04)];
+    @apply rounded-lg border border-border bg-surface p-5 text-foreground;
   }
 
   .crucible-card-muted {
-    @apply rounded-lg border border-border bg-muted p-5 text-foreground shadow-[inset_0_1px_0_rgb(255_255_255_/_0.035)];
+    @apply rounded-lg border border-border bg-muted p-5 text-foreground;
   }
 
   .crucible-card-compact {
     @apply rounded-md border border-border bg-surface-raised p-4 text-foreground;
-  }
-
-  .crucible-card-feature {
-    @apply relative rounded-lg bg-surface p-5 text-foreground shadow-[inset_0_1px_0_rgb(255_255_255_/_0.04)];
-    background-image:
-      linear-gradient(rgb(var(--surface)), rgb(var(--surface))),
-      linear-gradient(135deg, rgb(var(--ember)), rgb(var(--accent)) 55%, rgb(var(--forge)));
-    background-origin: border-box;
-    background-clip: padding-box, border-box;
-    border: 1px solid transparent;
   }
 
   .crucible-input {
@@ -117,15 +129,15 @@ select option {
   }
 
   .crucible-primary {
-    @apply inline-flex items-center justify-center rounded-md bg-gradient-to-r from-ember via-accent to-forge px-4 py-2 text-sm font-semibold tracking-tight text-accent-foreground shadow-[0_0_0_1px_rgb(255_255_255_/_0.08)_inset,0_8px_24px_-12px_rgb(238_109_35_/_0.55)] transition-[filter,transform] hover:brightness-110 active:translate-y-[1px];
+    @apply inline-flex items-center justify-center rounded-md bg-accent px-4 py-2 text-sm font-medium tracking-tight text-accent-foreground transition-colors hover:bg-accent-hover;
   }
 
   .crucible-secondary {
-    @apply inline-flex items-center justify-center rounded-md border border-border bg-surface px-4 py-2 text-sm font-medium text-foreground transition-colors hover:border-accent/60 hover:bg-surface-raised;
+    @apply inline-flex items-center justify-center rounded-md border border-border bg-transparent px-4 py-2 text-sm font-medium text-foreground transition-colors hover:border-border-strong hover:bg-surface-raised;
   }
 
   .crucible-danger {
-    @apply inline-flex items-center justify-center rounded-md border border-ember/60 bg-ember/10 px-4 py-2 text-sm font-medium text-ember hover:bg-ember/15;
+    @apply inline-flex items-center justify-center rounded-md border border-ember/40 bg-transparent px-4 py-2 text-sm font-medium text-ember transition-colors hover:bg-ember/10;
   }
 
   .crucible-code {
@@ -133,11 +145,11 @@ select option {
   }
 
   .crucible-link {
-    @apply text-sm font-medium text-forge transition-colors hover:text-accent-hover;
+    @apply text-sm font-medium text-accent transition-colors hover:text-accent-hover;
   }
 
   .crucible-eyebrow {
-    @apply text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground;
+    @apply text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground;
   }
 
   .crucible-muted {
@@ -148,24 +160,7 @@ select option {
     @apply bg-gradient-to-r from-ember via-accent to-forge bg-clip-text text-transparent;
   }
 
-  .crucible-gradient-bar {
-    @apply h-px w-full bg-gradient-to-r from-ember via-accent to-forge opacity-80;
-  }
-
-  .crucible-glow {
-    position: relative;
-    isolation: isolate;
-  }
-
-  .crucible-glow::before {
-    content: "";
-    position: absolute;
-    inset: -20%;
-    z-index: -1;
-    background:
-      radial-gradient(60% 60% at 30% 40%, rgb(var(--ember) / 0.18), transparent 70%),
-      radial-gradient(55% 55% at 75% 70%, rgb(var(--forge) / 0.14), transparent 70%);
-    filter: blur(20px);
-    pointer-events: none;
+  .crucible-divider {
+    @apply h-px w-full bg-border;
   }
 }

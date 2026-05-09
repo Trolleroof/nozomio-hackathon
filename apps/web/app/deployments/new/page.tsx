@@ -33,7 +33,7 @@ export default function NewDeploymentPage() {
     <AppFrame>
       <div className="mb-8">
         <p className="crucible-eyebrow">Mock planning, real contract shape</p>
-        <h1 className="mt-1 text-3xl font-semibold tracking-tight">New deployment</h1>
+        <h1 className="mt-1 text-2xl font-medium tracking-tight">New deployment</h1>
       </div>
 
       <div className="grid gap-5 lg:grid-cols-[0.95fr_1.05fr]">
