@@ -1,4 +1,5 @@
 import os
+import time
 import httpx
 from typing import List
 from ..models import GpuOffer
@@ -34,6 +35,7 @@ async def fetch() -> List[GpuOffer]:
         )
         resp.raise_for_status()
         data = resp.json()
+        _raise_graphql_errors(data)
 
     offers: List[GpuOffer] = []
     for gpu in data.get("data", {}).get("gpuTypes", []):
@@ -45,15 +47,10 @@ async def fetch() -> List[GpuOffer]:
         spot_price = prices.get("minimumBidPrice")
         on_demand_price = prices.get("uninterruptablePrice")
 
-        # Prefer spot if available, fall back to on-demand
-        if spot_price is not None:
-            price = float(spot_price)
-            instance_id = f"spot:{gpu['id']}"
-        elif on_demand_price is not None:
-            price = float(on_demand_price)
-            instance_id = f"ondemand:{gpu['id']}"
-        else:
+        if on_demand_price is None:
             continue
+        price = float(on_demand_price)
+        instance_id = f"ondemand:{gpu['id']}"
 
         offers.append(GpuOffer(
             provider="runpod",
@@ -83,28 +80,27 @@ mutation PodFindAndDeployOnDemand($input: PodFindAndDeployOnDemandInput!) {
 """
 
 
-async def launch(offer: GpuOffer, image: str = "runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel-ubuntu22.04") -> dict:
+async def launch(offer: GpuOffer, image: str = "runpod/pytorch") -> dict:
     api_key = os.environ["RUNPOD_API_KEY"]
     gpu_id = offer.instance_id.split(":", 1)[1]
-    bid_per_gpu = offer.price_per_hr * 1.05 if offer.instance_id.startswith("spot:") else None
 
     variables = {
         "input": {
             "gpuTypeId": gpu_id,
-            "cloudType": "SECURE",
+            "cloudType": "ALL",
             "gpuCount": offer.gpu_count,
-            "volumeInGb": 50,
-            "containerDiskInGb": 50,
-            "minVcpuCount": 4,
-            "minMemoryInGb": 24,
+            "volumeInGb": 40,
+            "containerDiskInGb": 40,
+            "minVcpuCount": 2,
+            "minMemoryInGb": 15,
+            "name": f"anygpu-{int(time.time())}",
             "dockerArgs": "",
             "ports": "8000/http",
+            "volumeMountPath": "/workspace",
             "imageName": image,
             "env": [],
         }
     }
-    if bid_per_gpu is not None:
-        variables["input"]["bidPerGpu"] = bid_per_gpu
 
     async with httpx.AsyncClient() as client:
         resp = await client.post(
@@ -114,7 +110,12 @@ async def launch(offer: GpuOffer, image: str = "runpod/pytorch:2.1.0-py3.10-cuda
             timeout=60,
         )
         resp.raise_for_status()
-        return resp.json().get("data", {}).get("podFindAndDeployOnDemand", {})
+        data = resp.json()
+        _raise_graphql_errors(data)
+        pod = data.get("data", {}).get("podFindAndDeployOnDemand")
+        if not pod:
+            raise RuntimeError(f"RunPod launch did not return a pod: {data}")
+        return pod
 
 
 _TERMINATE_MUTATION = """
@@ -134,4 +135,13 @@ async def terminate(pod_id: str) -> dict:
             timeout=30,
         )
         resp.raise_for_status()
-        return resp.json()
+        data = resp.json()
+        _raise_graphql_errors(data)
+        return data
+
+
+def _raise_graphql_errors(data: dict) -> None:
+    errors = data.get("errors") or []
+    if errors:
+        messages = "; ".join(str(error.get("message", error)) for error in errors)
+        raise RuntimeError(f"RunPod GraphQL error: {messages}")
