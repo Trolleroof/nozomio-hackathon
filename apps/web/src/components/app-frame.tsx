@@ -1,7 +1,6 @@
 import Link from "next/link";
 
 import { SidebarNav } from "@/components/sidebar-nav";
-import { demoSession } from "@/lib/session";
 
 export function AppFrame({ children }: { children: React.ReactNode }) {
   return (
@@ -13,9 +12,6 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
               <div className="text-sm font-medium tracking-tight">
                 <span className="crucible-gradient-text">Crucible</span>{" "}
                 <span className="text-foreground/85">Compute</span>
-              </div>
-              <div className="mt-1 truncate text-[11px] text-muted-foreground">
-                {demoSession.user.email}
               </div>
             </Link>
           </div>

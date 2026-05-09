@@ -1,22 +1,28 @@
-const FLAMES_A = `         )  (    )  (
-        ( )( )  ( )( )
-         )(  )  (  )(
-            *      *`;
+const FLAMES_A = String.raw`              (   )       (   )
+               ) (         ) (
+             _(   )_     _(   )_
+            /  \|/  |   |  \|/  |
+               ***         ***`;
 
-const FLAMES_B = `         (  )    (  )
-          )(      )(
-         (  *    *  )
-            *      *`;
+const FLAMES_B = String.raw`               ) (         ) (
+             _(   )_     _(   )_
+            /  \|/  |   |  \|/  |
+              ** **       ** **
+               * *         * *`;
 
-const ANVIL = `       _________________
-      /                 \\____
-      \\                      \\
-       \\______________________/
-            |          |
-            |          |
-        ____|__________|____
-       /                    \\
-      /______________________\\`;
+const ANVIL = String.raw`          ____________________________________
+     ____/####################################\____
+    /##############################################|
+   /###### ________________________________ #######|
+   \######|================================|########/
+    \#####|################################|#######/
+     \____|################################|______/
+           |###########________###########|
+           |##########|        |##########|
+        ___|##########|________|##########|___
+       /########################################|
+      /##########################################|
+     \____________________________________________/`;
 
 const MARK_ANVIL = `  __/__\\__
  /________\\
@@ -28,15 +34,15 @@ export function AnvilArtLarge({ className = "" }: { className?: string }) {
       aria-hidden="true"
       className={`inline-flex flex-col items-center font-mono leading-[1.05] ${className}`}
     >
-      <div className="relative h-[4.4em] w-full">
-        <pre className="flame-a absolute inset-x-0 top-0 m-0 whitespace-pre text-center text-[12px] text-ember sm:text-sm">
+      <div className="relative h-[5.4em] w-full">
+        <pre className="flame-a absolute inset-x-0 top-0 m-0 whitespace-pre text-center text-[11px] text-ember sm:text-sm lg:text-[15px]">
           {FLAMES_A}
         </pre>
-        <pre className="flame-b absolute inset-x-0 top-0 m-0 whitespace-pre text-center text-[12px] text-forge sm:text-sm">
+        <pre className="flame-b absolute inset-x-0 top-0 m-0 whitespace-pre text-center text-[11px] text-forge sm:text-sm lg:text-[15px]">
           {FLAMES_B}
         </pre>
       </div>
-      <pre className="m-0 whitespace-pre text-[12px] text-foreground/85 sm:text-sm">
+      <pre className="m-0 whitespace-pre text-[11px] text-foreground/85 sm:text-sm lg:text-[15px]">
         {ANVIL}
       </pre>
     </div>

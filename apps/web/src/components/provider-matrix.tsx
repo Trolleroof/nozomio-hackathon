@@ -34,20 +34,12 @@ function CapabilityMark({ enabled }: { enabled: boolean }) {
 
 export function ProviderMatrix({ providers }: { providers: ProviderCapability[] }) {
   return (
-    <section className="space-y-5">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="crucible-card-compact text-sm font-medium">
-          Live deploy supported
-        </div>
-        <div className="crucible-card-compact text-sm font-medium">
-          Dry-run/planning supported
-        </div>
-        <div className="crucible-card-compact text-sm font-medium">
-          Configured but not tested
-        </div>
-        <div className="crucible-card-compact text-sm font-medium">
-          Unsupported
-        </div>
+    <section className="space-y-4">
+      <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground">
+        <span>Live deploy supported</span>
+        <span>Dry-run/planning supported</span>
+        <span>Configured but not tested</span>
+        <span>Unsupported</span>
       </div>
 
       <div className="overflow-hidden rounded-md border border-border bg-surface">
@@ -56,34 +48,36 @@ export function ProviderMatrix({ providers }: { providers: ProviderCapability[] 
             <thead className="bg-muted text-left text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
                 <th className="px-4 py-3 font-medium">Provider</th>
-                <th className="px-4 py-3 font-medium">Adapter</th>
                 <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium">Endpoint</th>
-                <th className="px-4 py-3 font-medium">Logs</th>
-                <th className="px-4 py-3 font-medium">Stop</th>
-                <th className="px-4 py-3 font-medium">Checked</th>
+                <th className="px-4 py-3 font-medium">Capabilities</th>
                 <th className="px-4 py-3 font-medium">Notes</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {providers.map((provider) => (
                 <tr key={provider.id} className="align-top">
-                  <td className="px-4 py-4 font-medium text-foreground">{provider.provider}</td>
-                  <td className="px-4 py-4 text-muted-foreground">{provider.adapter}</td>
+                  <td className="px-4 py-4">
+                    <div className="font-medium text-foreground">{provider.provider}</div>
+                    <div className="mt-1 text-xs text-muted-foreground">{provider.adapter}</div>
+                  </td>
                   <td className="px-4 py-4">
                     <StatusBadge status={provider.status}>{capabilityLabel(provider)}</StatusBadge>
                   </td>
-                  <td className="px-4 py-4">
-                    <CapabilityMark enabled={provider.supportsOpenAIEndpoint} />
+                  <td className="px-4 py-4 text-muted-foreground">
+                    <div className="flex gap-4">
+                      <span className="inline-flex items-center gap-1.5">
+                        <CapabilityMark enabled={provider.supportsOpenAIEndpoint} /> Endpoint
+                      </span>
+                      <span className="inline-flex items-center gap-1.5">
+                        <CapabilityMark enabled={provider.supportsLogs} /> Logs
+                      </span>
+                      <span className="inline-flex items-center gap-1.5">
+                        <CapabilityMark enabled={provider.supportsStop} /> Stop
+                      </span>
+                    </div>
+                    <div className="mt-2 font-mono text-xs">Checked {formatDateTime(provider.lastCheckedAt)}</div>
                   </td>
-                  <td className="px-4 py-4">
-                    <CapabilityMark enabled={provider.supportsLogs} />
-                  </td>
-                  <td className="px-4 py-4">
-                    <CapabilityMark enabled={provider.supportsStop} />
-                  </td>
-                  <td className="px-4 py-4 font-mono text-muted-foreground">{formatDateTime(provider.lastCheckedAt)}</td>
-                  <td className="max-w-xs px-4 py-4 text-muted-foreground">
+                  <td className="max-w-sm px-4 py-4 text-muted-foreground">
                     <div>{provider.notes}</div>
                     {provider.lastError ? (
                       <div className="mt-2 flex gap-2 text-ember">

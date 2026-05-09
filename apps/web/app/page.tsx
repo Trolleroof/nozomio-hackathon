@@ -23,7 +23,7 @@ export default function LandingPage() {
         </div>
       </header>
 
-      <section className="mx-auto grid max-w-5xl gap-16 px-6 pb-24 pt-20 lg:grid-cols-[1fr_auto] lg:items-center lg:gap-24 lg:pt-28">
+      <section className="mx-auto grid max-w-6xl gap-16 px-6 pb-24 pt-20 lg:grid-cols-[1fr_auto] lg:items-center lg:gap-20 lg:pt-28">
         <div className="max-w-xl">
           <h1 className="text-5xl font-medium leading-[1.05] tracking-tight sm:text-6xl">
             <span className="crucible-gradient-text">Crucible</span>
@@ -44,7 +44,7 @@ export default function LandingPage() {
           </div>
         </div>
 
-        <div className="flex justify-center lg:justify-end">
+        <div className="flex justify-center overflow-hidden lg:justify-end">
           <AnvilArtLarge />
         </div>
       </section>
