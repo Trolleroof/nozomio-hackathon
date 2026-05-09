@@ -9,9 +9,6 @@ export default function SignupPage() {
           <span className="text-foreground/85"> Compute</span>
         </Link>
         <h1 className="mt-8 text-2xl font-medium tracking-tight">Create account</h1>
-        <p className="mt-1.5 text-sm text-muted-foreground">
-          Start a deployment in minutes.
-        </p>
         <form className="mt-8 space-y-4">
           <div>
             <label className="block text-sm font-medium" htmlFor="email">

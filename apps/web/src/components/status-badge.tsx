@@ -5,28 +5,28 @@ import { formatStatusLabel } from "@/lib/format";
 type Status = DeploymentStatus | ProviderStatus | HealthStatus | "generated";
 
 const toneByStatus: Record<string, string> = {
-  approval_required: "border-forge/60 bg-forge/15 text-forge",
-  approved: "border-accent/55 bg-accent/15 text-accent-hover",
-  configured: "border-border bg-surface-raised text-muted-foreground",
-  draft: "border-border bg-surface-raised text-muted-foreground",
-  dry_run_only: "border-accent/55 bg-accent/15 text-accent-hover",
-  error: "border-ember/60 bg-ember/15 text-ember",
-  failed: "border-ember/60 bg-ember/15 text-ember",
-  failing: "border-ember/60 bg-ember/15 text-ember",
-  generated: "border-border bg-surface-raised text-foreground",
-  health_checking: "border-accent/55 bg-accent/15 text-accent-hover",
-  info: "border-border bg-surface-raised text-muted-foreground",
-  live: "border-success/60 bg-success/15 text-success",
-  not_run: "border-border bg-surface-raised text-muted-foreground",
-  passing: "border-success/60 bg-success/15 text-success",
-  pending: "border-forge/60 bg-forge/15 text-forge",
-  provisioning: "border-accent/55 bg-accent/15 text-accent-hover",
-  queued: "border-accent/55 bg-accent/15 text-accent-hover",
-  ready: "border-success/60 bg-success/15 text-success",
-  stopped: "border-border bg-surface-raised text-muted-foreground",
-  stopping: "border-forge/60 bg-forge/15 text-forge",
-  unsupported: "border-border bg-surface-raised text-muted-foreground",
-  warn: "border-forge/60 bg-forge/15 text-forge"
+  approval_required: "text-forge",
+  approved: "text-accent-hover",
+  configured: "text-muted-foreground",
+  draft: "text-muted-foreground",
+  dry_run_only: "text-accent-hover",
+  error: "text-ember",
+  failed: "text-ember",
+  failing: "text-ember",
+  generated: "text-foreground",
+  health_checking: "text-accent-hover",
+  info: "text-muted-foreground",
+  live: "text-success",
+  not_run: "text-muted-foreground",
+  passing: "text-success",
+  pending: "text-forge",
+  provisioning: "text-accent-hover",
+  queued: "text-accent-hover",
+  ready: "text-success",
+  stopped: "text-muted-foreground",
+  stopping: "text-forge",
+  unsupported: "text-muted-foreground",
+  warn: "text-forge"
 };
 
 export function StatusBadge({
@@ -36,13 +36,16 @@ export function StatusBadge({
   status: Status | string;
   children?: React.ReactNode;
 }) {
+  const label = children ?? formatStatusLabel(status);
+
   return (
     <span
-      className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-medium uppercase tracking-[0.08em] ${
-        toneByStatus[status] ?? "border-border bg-surface-raised text-muted-foreground"
+      className={`inline-flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.08em] ${
+        toneByStatus[status] ?? "text-muted-foreground"
       }`}
     >
-      {children ?? formatStatusLabel(status)}
+      <span aria-hidden="true" className="h-1.5 w-1.5 bg-current" />
+      {label}
     </span>
   );
 }

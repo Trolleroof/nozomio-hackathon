@@ -6,8 +6,7 @@ export default function ContextPage() {
   return (
     <AppFrame>
       <div className="mb-8">
-        <p className="crucible-eyebrow">Cached Nia context visible to judges and agents</p>
-        <h1 className="mt-1 text-2xl font-medium tracking-tight">Context</h1>
+        <h1 className="text-2xl font-medium tracking-tight">Context</h1>
       </div>
       <ContextPanel snippets={contextSnippets} />
     </AppFrame>

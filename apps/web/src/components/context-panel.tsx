@@ -31,7 +31,8 @@ export function ContextPanel({ snippets }: { snippets: NiaContextSnippet[] }) {
           </div>
           <div className="mt-3 flex flex-wrap gap-2 text-sm">
             {snippets.map((snippet) => (
-              <span key={snippet.id} className="rounded-full border border-border bg-surface-raised px-3 py-1 text-muted-foreground">
+              <span key={snippet.id} className="inline-flex items-center gap-2 text-muted-foreground">
+                <span aria-hidden="true" className="h-1 w-1 bg-accent" />
                 {snippet.usedFor}
               </span>
             ))}

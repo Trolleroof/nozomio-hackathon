@@ -14,8 +14,7 @@ export default function DashboardPage() {
     <AppFrame>
       <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
-          <p className="crucible-eyebrow">Authenticated demo workspace</p>
-          <h1 className="mt-1 text-2xl font-medium tracking-tight">Dashboard</h1>
+          <h1 className="text-2xl font-medium tracking-tight">Dashboard</h1>
         </div>
         <Link
           href="/deployments/new"

@@ -9,6 +9,7 @@ import sqlite3
 import time
 from typing import Any, Sequence
 
+from .config import load_config
 from .crucible_store import CrucibleStore
 
 
@@ -270,6 +271,7 @@ def explain_failure_with_context(store: CrucibleStore, deployment_id: str, error
 
 def list_provider_capabilities(store: CrucibleStore) -> list[dict[str, Any]]:
     now = _now()
+    config = load_config()
     records = [
         _provider_record(
             "Modal",
@@ -298,6 +300,13 @@ def list_provider_capabilities(store: CrucibleStore) -> list[dict[str, Any]]:
             supports_openai_endpoint=False,
             credential_names=["COREWEAVE_API_KEY", "COREWEAVE_KUBECONFIG"],
             notes="Provider catalog entry only; no direct launch adapter is enabled here.",
+        ),
+        _provider_record(
+            "Vast.ai",
+            configured=bool(config.get("vast_api_key")),
+            supports_openai_endpoint=True,
+            credential_names=["VAST_AI_API_KEY", "ANYGPU_VAST_API_KEY"],
+            notes="Marketplace launch adapter is available when Vast credentials are configured.",
         ),
         _provider_record(
             "Tensorlake",

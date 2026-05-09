@@ -119,6 +119,9 @@ def test_provider_capabilities_are_honest_without_credentials(tmp_path: Path, mo
     monkeypatch.delenv("MODAL_TOKEN_ID", raising=False)
     monkeypatch.delenv("MODAL_TOKEN_SECRET", raising=False)
     monkeypatch.delenv("SKYPILOT_API_SERVER_ENDPOINT", raising=False)
+    monkeypatch.delenv("VAST_AI_API_KEY", raising=False)
+    monkeypatch.delenv("ANYGPU_VAST_API_KEY", raising=False)
+    monkeypatch.chdir(tmp_path)
     store = CrucibleStore()
 
     capabilities = list_provider_capabilities(store)
@@ -129,6 +132,37 @@ def test_provider_capabilities_are_honest_without_credentials(tmp_path: Path, mo
     assert by_provider["SkyPilot"]["supports_deploy"] is False
     assert by_provider["Lambda Cloud"]["status"] in {"configured", "unsupported"}
     assert by_provider["CoreWeave"]["status"] in {"configured", "unsupported"}
+    assert by_provider["Vast.ai"]["status"] == "unsupported"
+    assert by_provider["Vast.ai"]["supports_openai_endpoint"] is True
+
+
+def test_provider_capabilities_configures_vast_with_api_key(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("ANYGPU_HOME", str(tmp_path / "state"))
+    monkeypatch.setenv("VAST_AI_API_KEY", "test-token")
+    store = CrucibleStore()
+
+    capabilities = list_provider_capabilities(store)
+
+    vast = {item["provider"]: item for item in capabilities}["Vast.ai"]
+    assert vast["status"] == "configured"
+    assert vast["supports_deploy"] is True
+    assert vast["supports_openai_endpoint"] is True
+    assert vast["credentials_required"] == ["VAST_AI_API_KEY", "ANYGPU_VAST_API_KEY"]
+
+
+def test_provider_capabilities_configures_vast_from_dotenv(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("ANYGPU_HOME", str(tmp_path / "state"))
+    monkeypatch.delenv("VAST_AI_API_KEY", raising=False)
+    monkeypatch.delenv("ANYGPU_VAST_API_KEY", raising=False)
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".env").write_text("VAST_AI_API_KEY=dotenv-token\n")
+    store = CrucibleStore()
+
+    capabilities = list_provider_capabilities(store)
+
+    vast = {item["provider"]: item for item in capabilities}["Vast.ai"]
+    assert vast["status"] == "configured"
+    assert vast["supports_deploy"] is True
 
 
 def test_crucible_cli_plan_approve_deploy_status(tmp_path: Path) -> None:
