@@ -127,7 +127,7 @@ def _register_anygpu_gateway_route(
             "endpoint": "openai",
             "gateway": contract,
             "url": contract["chat_completions_url"],
-            "upstream_url": f"{runtime_url}/chat/completions",
+            "upstream_url": f"{runtime_url}/v1/chat/completions",
             "health": "healthy",
             "created_at": created_at,
             "runtime_process": {
@@ -147,7 +147,7 @@ def _register_anygpu_gateway_route(
         "base_url": contract["base_url"],
         "model": contract["model"],
         "chat_completions_url": contract["chat_completions_url"],
-        "upstream_url": f"{runtime_url}/chat/completions",
+        "upstream_url": f"{runtime_url}/v1/chat/completions",
     }
 
 

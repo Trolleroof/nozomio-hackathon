@@ -1,7 +1,23 @@
 import json
 import asyncio
 
-from mcp_server.providers import vast_ai
+import pytest
+
+from mcp_server.providers import runpod, vast_ai
+
+
+def test_runpod_fetch_rejects_blank_api_key(monkeypatch) -> None:
+    monkeypatch.setenv("RUNPOD_API_KEY", "")
+
+    with pytest.raises(RuntimeError, match="RUNPOD_API_KEY is required"):
+        asyncio.run(runpod.fetch())
+
+
+def test_vast_fetch_rejects_blank_api_key(monkeypatch) -> None:
+    monkeypatch.setenv("VAST_API_KEY", "")
+
+    with pytest.raises(RuntimeError, match="VAST_API_KEY is required"):
+        asyncio.run(vast_ai.fetch())
 
 
 def test_vast_fetch_follows_provider_redirects(monkeypatch) -> None:

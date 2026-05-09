@@ -33,6 +33,13 @@ def _generate_api_key() -> str:
     return secrets.token_urlsafe(32)
 
 
+def _required_env(name: str) -> str:
+    value = os.environ.get(name, "").strip()
+    if not value:
+        raise RuntimeError(f"{name} is required.")
+    return value
+
+
 async def _wait_for_endpoint(url: str, api_key: Optional[str] = None, timeout: int = 600) -> bool:
     headers = {"Authorization": f"Bearer {api_key}"} if api_key else None
     deadline = time.time() + timeout
@@ -109,7 +116,7 @@ async def _deploy_runpod(offer: GpuOffer, vllm_api_key: str) -> DeployedInstance
     gpu_id = offer.instance_id.split(":", 1)[1]
 
     import httpx as _httpx
-    api_key = os.environ["RUNPOD_API_KEY"]
+    api_key = _required_env("RUNPOD_API_KEY")
     mutation = """
     mutation PodFindAndDeployOnDemand($input: PodFindAndDeployOnDemandInput!) {
       podFindAndDeployOnDemand(input: $input) {
@@ -167,7 +174,7 @@ async def _deploy_runpod(offer: GpuOffer, vllm_api_key: str) -> DeployedInstance
 
 async def _poll_runpod_endpoint(pod_id: str, vllm_api_key: str, timeout: int = 600) -> str:
     import httpx as _httpx
-    api_key = os.environ["RUNPOD_API_KEY"]
+    api_key = _required_env("RUNPOD_API_KEY")
     query = """
     query Pod($podId: String!) {
       pod(input: { podId: $podId }) {
@@ -242,7 +249,11 @@ async def _deploy_modal(offer: GpuOffer, vllm_api_key: str) -> DeployedInstance:
         f.write(script)
         script_path = f.name
 
-    env = {**os.environ, "MODAL_TOKEN_ID": os.environ["MODAL_TOKEN_ID"], "MODAL_TOKEN_SECRET": os.environ["MODAL_TOKEN_SECRET"]}
+    env = {
+        **os.environ,
+        "MODAL_TOKEN_ID": _required_env("MODAL_TOKEN_ID"),
+        "MODAL_TOKEN_SECRET": _required_env("MODAL_TOKEN_SECRET"),
+    }
     result = subprocess.run(["modal", "deploy", script_path], capture_output=True, text=True, env=env)
     if result.returncode != 0:
         raise RuntimeError(f"modal deploy failed:\n{result.stderr}")

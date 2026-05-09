@@ -24,8 +24,15 @@ query GpuTypes {
 """
 
 
+def _api_key() -> str:
+    api_key = os.environ.get("RUNPOD_API_KEY", "").strip()
+    if not api_key:
+        raise RuntimeError("RUNPOD_API_KEY is required.")
+    return api_key
+
+
 async def fetch() -> List[GpuOffer]:
-    api_key = os.environ["RUNPOD_API_KEY"]
+    api_key = _api_key()
     async with httpx.AsyncClient() as client:
         resp = await client.post(
             GRAPHQL_URL,
@@ -81,7 +88,7 @@ mutation PodFindAndDeployOnDemand($input: PodFindAndDeployOnDemandInput!) {
 
 
 async def launch(offer: GpuOffer, image: str = "runpod/pytorch") -> dict:
-    api_key = os.environ["RUNPOD_API_KEY"]
+    api_key = _api_key()
     gpu_id = offer.instance_id.split(":", 1)[1]
 
     variables = {
@@ -126,7 +133,7 @@ mutation PodTerminate($input: PodTerminateInput!) {
 
 
 async def terminate(pod_id: str) -> dict:
-    api_key = os.environ["RUNPOD_API_KEY"]
+    api_key = _api_key()
     async with httpx.AsyncClient() as client:
         resp = await client.post(
             GRAPHQL_URL,

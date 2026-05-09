@@ -9,8 +9,15 @@ MIN_VRAM_GB = 16
 MIN_RELIABILITY = 0.95
 
 
+def _api_key() -> str:
+    api_key = os.environ.get("VAST_API_KEY", "").strip()
+    if not api_key:
+        raise RuntimeError("VAST_API_KEY is required.")
+    return api_key
+
+
 async def fetch() -> List[GpuOffer]:
-    api_key = os.environ["VAST_API_KEY"]
+    api_key = _api_key()
     params = {
         "q": {
             "gpu_ram": {"gte": MIN_VRAM_GB * 1024},  # vast uses MB
@@ -54,7 +61,7 @@ async def fetch() -> List[GpuOffer]:
 
 
 async def launch(offer: GpuOffer, image: str = "pytorch/pytorch:2.1.0-cuda11.8-cudnn8-devel") -> dict:
-    api_key = os.environ["VAST_API_KEY"]
+    api_key = _api_key()
     async with httpx.AsyncClient() as client:
         resp = await client.put(
             f"{BASE_URL}/asks/{offer.instance_id}/",
@@ -74,7 +81,7 @@ async def launch(offer: GpuOffer, image: str = "pytorch/pytorch:2.1.0-cuda11.8-c
 
 
 async def terminate(contract_id: str) -> dict:
-    api_key = os.environ["VAST_API_KEY"]
+    api_key = _api_key()
     async with httpx.AsyncClient() as client:
         resp = await client.delete(
             f"{BASE_URL}/instances/{contract_id}/",
@@ -86,7 +93,7 @@ async def terminate(contract_id: str) -> dict:
 
 
 async def get_instance(contract_id: str) -> dict:
-    api_key = os.environ["VAST_API_KEY"]
+    api_key = _api_key()
     async with httpx.AsyncClient() as client:
         resp = await client.get(
             f"{BASE_URL}/instances/{contract_id}/",
