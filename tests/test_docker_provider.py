@@ -214,7 +214,9 @@ def test_serve_start_ps_logs_stop_docker_llama_cpp(tmp_path: Path) -> None:
         extra_env=env,
     )
     assert "Started qwen-local on local-docker" in started
-    assert "http://127.0.0.1:8080/v1/chat/completions" in started
+    assert "base_url: http://127.0.0.1:8765/v1" in started
+    assert "model: qwen-local" in started
+    assert "upstream_url: http://127.0.0.1:8080/v1/chat/completions" in started
 
     state = read_state(home)
     deployment = state["deployments"]["qwen-local"]
@@ -283,7 +285,9 @@ def test_serve_start_docker_vllm_hf_model(tmp_path: Path) -> None:
     assert "Started qwen-vllm on local-docker" in started
     deployment = read_state(home)["deployments"]["qwen-vllm"]
     process = deployment["runtime_process"]
-    assert f"http://127.0.0.1:{process['port']}/v1/chat/completions" in started
+    assert "base_url: http://127.0.0.1:8765/v1" in started
+    assert "model: qwen-vllm" in started
+    assert f"upstream_url: http://127.0.0.1:{process['port']}/v1/chat/completions" in started
     assert deployment["runtime"] == "vllm"
     assert process["image"] == "vllm/vllm-openai:latest"
     assert process["container_port"] == 8000

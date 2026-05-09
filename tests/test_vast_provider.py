@@ -239,7 +239,9 @@ def test_serve_start_and_stop_vast_runtime_records_instance_metadata(tmp_path: P
         )
 
         assert "Started vast-smoke on vast-prod" in started
-        assert "http://198.51.100.55:18000/v1/chat/completions" in started
+        assert "base_url: http://127.0.0.1:8765/v1" in started
+        assert "model: vast-smoke" in started
+        assert "upstream_url: http://198.51.100.55:18000/v1/chat/completions" in started
         deployment = read_state(home)["deployments"]["vast-smoke"]
         process = deployment["runtime_process"]
         assert deployment["provider"] == "vast"

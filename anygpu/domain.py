@@ -74,6 +74,15 @@ MANAGED_POOLS: dict[str, dict[str, Any]] = {
 }
 
 
+def gateway_contract(name: str, host: str = "127.0.0.1", port: int = 8765) -> dict[str, str]:
+    base_url = f"http://{host}:{port}/v1"
+    return {
+        "base_url": base_url,
+        "model": name,
+        "chat_completions_url": f"{base_url}/chat/completions",
+    }
+
+
 BROKER_PROVIDER_SEEDS: list[dict[str, Any]] = [
     {
         "id": "runpod",
@@ -1748,7 +1757,8 @@ def deploy_model(
         "runtime": runtime or "auto",
         "replicas": parse_replicas(replicas),
         "endpoint": endpoint or "openai",
-        "url": "http://127.0.0.1:8765/v1/chat/completions",
+        "gateway": gateway_contract(name),
+        "url": gateway_contract(name)["chat_completions_url"],
         "routes": routes,
         "health": "healthy",
         "created_at": now(),
@@ -2189,7 +2199,9 @@ def start_serve_runtime(
             "model_source": model_path,
             "runtime": runtime,
             "endpoint": "openai",
-            "url": f"{process['upstream_url']}/v1/chat/completions" if process.get("upstream_url") else "pending",
+            "gateway": gateway_contract(name),
+            "url": gateway_contract(name)["chat_completions_url"],
+            "upstream_url": f"{process['upstream_url']}/v1/chat/completions" if process.get("upstream_url") else "pending",
             "health": process.get("health", "provisioning"),
             "created_at": now(),
             "runtime_process": process,
@@ -2247,7 +2259,9 @@ def start_serve_runtime(
             "model_source": model_path,
             "runtime": runtime,
             "endpoint": "openai",
-            "url": f"{process['upstream_url']}/v1/chat/completions" if process.get("upstream_url") else "pending",
+            "gateway": gateway_contract(name),
+            "url": gateway_contract(name)["chat_completions_url"],
+            "upstream_url": f"{process['upstream_url']}/v1/chat/completions" if process.get("upstream_url") else "pending",
             "health": process.get("health", "provisioning"),
             "created_at": now(),
             "runtime_process": process,
@@ -2298,7 +2312,9 @@ def start_serve_runtime(
         "model_source": model_path,
         "runtime": runtime,
         "endpoint": "openai",
-        "url": f"{process['upstream_url']}/v1/chat/completions",
+        "gateway": gateway_contract(name),
+        "url": gateway_contract(name)["chat_completions_url"],
+        "upstream_url": f"{process['upstream_url']}/v1/chat/completions",
         "health": "healthy" if process["health"] in {"running", "healthy"} else process["health"],
         "created_at": now(),
         "runtime_process": process,
@@ -2392,7 +2408,7 @@ def serve_runtime_rows(state: dict[str, Any]) -> list[dict[str, Any]]:
             process["health"] = "healthy" if health.get("healthy") else health.get("status", "unknown")
             if health.get("upstream_url"):
                 process["upstream_url"] = health["upstream_url"]
-                deployment["url"] = f"{health['upstream_url']}/v1/chat/completions"
+                deployment["upstream_url"] = f"{health['upstream_url']}/v1/chat/completions"
             deployment["health"] = process["health"]
             for route in deployment.get("routes", []):
                 route["status"] = process["health"]

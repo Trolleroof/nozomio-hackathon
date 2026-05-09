@@ -21,6 +21,31 @@ def _tensorlake_adapter():
     return importlib.import_module("anygpu.tensorlake_sandbox")
 
 
+def _anygpu_gateway_endpoint() -> Optional[dict]:
+    try:
+        domain = importlib.import_module("anygpu.domain")
+        state_module = importlib.import_module("anygpu.state")
+        state = state_module.load_state()
+    except Exception:
+        return None
+    deployments = [
+        deployment
+        for deployment in state.get("deployments", {}).values()
+        if deployment.get("health") != "stopped"
+    ]
+    if not deployments:
+        return None
+    deployment = sorted(deployments, key=lambda item: item.get("created_at", ""))[-1]
+    contract = deployment.get("gateway") or domain.gateway_contract(deployment["name"])
+    endpoint = {
+        "base_url": contract["base_url"],
+        "model": contract["model"],
+    }
+    if deployment.get("upstream_url"):
+        endpoint["upstream_url"] = deployment["upstream_url"]
+    return endpoint
+
+
 @mcp.tool()
 async def list_gpu_prices(min_vram_gb: int = 16, top_n: int = 10) -> str:
     """Query all GPU cloud providers and return the cheapest available options.
@@ -133,7 +158,10 @@ async def deploy_cheapest(min_vram_gb: int = 16, provider: Optional[str] = None)
 
 @mcp.tool()
 async def get_endpoint() -> str:
-    """Return the OpenAI-compatible base URL and API key for the running vLLM instance."""
+    """Return the OpenAI-compatible AnyGPU gateway base URL and model."""
+    endpoint = _anygpu_gateway_endpoint()
+    if endpoint is not None:
+        return json.dumps(endpoint, indent=2)
     if _active is None:
         return json.dumps({"error": "No active deployment. Call deploy_cheapest() first."})
     return json.dumps({

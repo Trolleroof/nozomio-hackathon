@@ -9,7 +9,7 @@ import urllib.request
 
 from .config import load_config
 from .domain import record_usage
-from .provider import DockerProvider
+from .provider import DockerProvider, VastProvider, VultrProvider
 from .state import edit_state, load_state
 
 
@@ -116,16 +116,46 @@ def _proxy_to_runtime(
 
 
 def _refresh_deployment_health(state: dict[str, Any], deployment: dict[str, Any]) -> None:
-    if deployment.get("provider") != "docker":
+    provider_name = deployment.get("provider")
+    if provider_name not in {"docker", "vast", "vultr"}:
         return
     process = deployment.get("runtime_process")
     if not process or deployment.get("health") == "stopped":
         return
-    health = DockerProvider(load_config(state.get("config", {}))).health_check(process)
-    process["health"] = "healthy" if health["healthy"] else health["status"]
+    config = load_config(state.get("config", {}))
+    if provider_name == "vast":
+        provider = VastProvider(config)
+    elif provider_name == "vultr":
+        provider = VultrProvider(config)
+    else:
+        provider = DockerProvider(config)
+    health = provider.health_check(process)
+    process["health"] = "healthy" if health.get("healthy") else health.get("status", "unknown")
+    if health.get("upstream_url"):
+        process["upstream_url"] = health["upstream_url"]
+        deployment["upstream_url"] = f"{health['upstream_url']}/v1/chat/completions"
     deployment["health"] = process["health"]
     for route in deployment.get("routes", []):
         route["status"] = process["health"]
+        if process.get("upstream_url"):
+            route["upstream_url"] = process["upstream_url"]
+            route["runtime_url"] = process["upstream_url"]
+
+
+def _model_list(state: dict[str, Any]) -> dict[str, Any]:
+    data = []
+    for deployment in state.get("deployments", {}).values():
+        if deployment.get("health") == "stopped":
+            continue
+        data.append(
+            {
+                "id": deployment["name"],
+                "object": "model",
+                "created": int(time.time()),
+                "owned_by": "anygpu",
+            }
+        )
+    return {"object": "list", "data": sorted(data, key=lambda item: item["id"])}
 
 
 class AnyGPUGatewayHandler(BaseHTTPRequestHandler):
@@ -141,6 +171,10 @@ class AnyGPUGatewayHandler(BaseHTTPRequestHandler):
                 name for name, deployment in state["deployments"].items() if deployment.get("health") == "healthy"
             ]
             _json_response(self, 200, {"status": "ok", "deployments": deployments})
+            return
+        if self.path == "/v1/models":
+            state = load_state()
+            _json_response(self, 200, _model_list(state))
             return
         _json_response(self, 404, {"error": "not_found"})
 

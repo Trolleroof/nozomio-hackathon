@@ -83,6 +83,11 @@ def post_json_with_headers(url: str, payload: dict) -> tuple[dict, dict]:
         return json.loads(response.read().decode()), headers
 
 
+def get_json(url: str) -> dict:
+    with urllib.request.urlopen(url, timeout=5) as response:
+        return json.loads(response.read().decode())
+
+
 def test_gateway_refreshes_docker_route_health_before_selection(monkeypatch) -> None:
     state = initial_state()
     deployment = {
@@ -109,6 +114,51 @@ def test_gateway_refreshes_docker_route_health_before_selection(monkeypatch) -> 
     assert deployment["routes"][0]["status"] == "healthy"
 
 
+def test_gateway_refreshes_vast_and_vultr_route_health(monkeypatch) -> None:
+    state = initial_state()
+    vast_deployment = {
+        "name": "vast-chat",
+        "provider": "vast",
+        "health": "provisioning",
+        "runtime_process": {"vast_instance_id": "555", "health": "provisioning"},
+        "routes": [{"route": "vast:gpu", "status": "provisioning"}],
+    }
+    vultr_deployment = {
+        "name": "vultr-chat",
+        "provider": "vultr",
+        "health": "provisioning",
+        "runtime_process": {"vultr_id": "inst-123", "health": "provisioning"},
+        "routes": [{"route": "vultr:gpu", "status": "provisioning"}],
+    }
+
+    class FakeVastProvider:
+        def __init__(self, config: dict):
+            self.config = config
+
+        def health_check(self, process: dict) -> dict:
+            return {"healthy": True, "status": "running", "upstream_url": "http://198.51.100.55:18000"}
+
+    class FakeVultrProvider:
+        def __init__(self, config: dict):
+            self.config = config
+
+        def health_check(self, process: dict) -> dict:
+            return {"healthy": True, "status": "active", "upstream_url": "http://203.0.113.10:8000"}
+
+    monkeypatch.setattr("anygpu.gateway.VastProvider", FakeVastProvider)
+    monkeypatch.setattr("anygpu.gateway.VultrProvider", FakeVultrProvider)
+
+    _refresh_deployment_health(state, vast_deployment)
+    _refresh_deployment_health(state, vultr_deployment)
+
+    assert vast_deployment["health"] == "healthy"
+    assert vast_deployment["routes"][0]["runtime_url"] == "http://198.51.100.55:18000"
+    assert vast_deployment["upstream_url"] == "http://198.51.100.55:18000/v1/chat/completions"
+    assert vultr_deployment["health"] == "healthy"
+    assert vultr_deployment["routes"][0]["runtime_url"] == "http://203.0.113.10:8000"
+    assert vultr_deployment["upstream_url"] == "http://203.0.113.10:8000/v1/chat/completions"
+
+
 def test_gateway_serves_openai_chat_and_records_usage(tmp_path: Path, monkeypatch) -> None:
     home = tmp_path / "anygpu"
     prepare_deployment(home)
@@ -122,6 +172,9 @@ def test_gateway_serves_openai_chat_and_records_usage(tmp_path: Path, monkeypatc
         time.sleep(0.05)
         health = urllib.request.urlopen(f"http://127.0.0.1:{port}/healthz", timeout=5)
         assert health.status == 200
+        models = get_json(f"http://127.0.0.1:{port}/v1/models")
+        assert models["object"] == "list"
+        assert {model["id"] for model in models["data"]} == {"support-chat-prod"}
 
         body = post_json(
             f"http://127.0.0.1:{port}/v1/chat/completions",

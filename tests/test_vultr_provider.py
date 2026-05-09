@@ -256,7 +256,9 @@ def test_serve_start_and_stop_vultr_runtime_records_cloud_metadata(tmp_path: Pat
         )
 
         assert "Started qwen-vultr on vultr-prod" in started
-        assert "http://203.0.113.10:8000/v1/chat/completions" in started
+        assert "base_url: http://127.0.0.1:8765/v1" in started
+        assert "model: qwen-vultr" in started
+        assert "upstream_url: http://203.0.113.10:8000/v1/chat/completions" in started
         state = read_state(home)
         deployment = state["deployments"]["qwen-vultr"]
         process = deployment["runtime_process"]
