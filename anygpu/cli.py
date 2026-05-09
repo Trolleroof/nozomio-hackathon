@@ -26,6 +26,7 @@ from .domain import (
     runtime_processes,
     explain_scheduled_deployment,
     generate_kubernetes_manifest,
+    gateway_contract,
     schedule_deployment,
     set_cost_record,
     serve_runtime_logs,
@@ -423,7 +424,12 @@ def command_serve_start(args: argparse.Namespace) -> None:
             confirm_cost=args.confirm_cost,
         )
     print(f"Started {deployment['name']} on {deployment['compute']}")
-    print(deployment["url"])
+    contract = deployment.get("gateway") or gateway_contract(deployment["name"])
+    print(f"base_url: {contract['base_url']}")
+    print(f"model: {contract['model']}")
+    upstream_url = deployment.get("upstream_url")
+    if upstream_url and upstream_url != "pending":
+        print(f"upstream_url: {upstream_url}")
 
 
 def command_serve_ps(_: argparse.Namespace) -> None:

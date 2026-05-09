@@ -58,8 +58,9 @@ const EASE = Easing.bezier(0.16, 1, 0.3, 1);
 
 // ============== Reusable bits ==============
 const useAppear = (rawStart: number, rawEnd: number) => {
+  // Snappier reveals: keep the original entry timing but shorten the ramp.
   const start = rawStart * SLOW;
-  const end = rawEnd * SLOW;
+  const end = start + (rawEnd - rawStart) * SLOW * 0.45;
   const frame = useCurrentFrame();
   const o = interpolate(frame, [start, end], [0, 1], {
     extrapolateLeft: "clamp",
@@ -236,11 +237,11 @@ const SceneWrap: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { durationInFrames } = useVideoConfig();
   const opacity = interpolate(
     frame,
-    [0, 8, durationInFrames - 10, durationInFrames],
+    [0, 4, durationInFrames - 10, durationInFrames],
     [0, 1, 1, 0],
     { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: EASE },
   );
-  const scale = interpolate(frame, [0, 14], [0.985, 1], {
+  const scale = interpolate(frame, [0, 6], [0.99, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
     easing: EASE,
