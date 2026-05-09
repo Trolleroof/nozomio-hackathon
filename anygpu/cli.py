@@ -733,6 +733,85 @@ def command_runtime_cleanup(_: argparse.Namespace) -> None:
         print("No stale runtime processes found")
 
 
+def print_json(payload: Any) -> None:
+    print(json.dumps(payload, sort_keys=True))
+
+
+def _crucible_store() -> Any:
+    from .crucible_store import CrucibleStore
+
+    return CrucibleStore()
+
+
+def command_crucible_signup(args: argparse.Namespace) -> None:
+    from .crucible import signup_user
+
+    user = signup_user(_crucible_store(), args.email, args.password, role=args.role)
+    print_json(user)
+
+
+def command_crucible_plan(args: argparse.Namespace) -> None:
+    from .crucible import create_deployment_plan
+
+    plan = create_deployment_plan(_crucible_store(), args.user_id, args.prompt, source="cli")
+    print_json(plan)
+
+
+def command_crucible_approve(args: argparse.Namespace) -> None:
+    from .crucible import approve_plan
+
+    approval = approve_plan(_crucible_store(), args.plan_id, args.user_id)
+    print_json(approval)
+
+
+def command_crucible_deploy(args: argparse.Namespace) -> None:
+    from .crucible import ApprovalRequiredError, deploy_approved_plan
+
+    try:
+        deployment = deploy_approved_plan(_crucible_store(), args.plan_id, approval_token=args.approval_token)
+    except ApprovalRequiredError as exc:
+        print_json({"error": str(exc)})
+        return
+    print_json(deployment)
+
+
+def command_crucible_status(args: argparse.Namespace) -> None:
+    from .crucible import get_deployment
+
+    deployment = get_deployment(_crucible_store(), args.deployment_id)
+    print_json(deployment)
+
+
+def command_crucible_logs(args: argparse.Namespace) -> None:
+    from .crucible import get_deployment_logs
+
+    print_json(get_deployment_logs(_crucible_store(), args.deployment_id))
+
+
+def command_crucible_health(args: argparse.Namespace) -> None:
+    from .crucible import run_health_check
+
+    print_json(run_health_check(_crucible_store(), args.deployment_id))
+
+
+def command_crucible_stop(args: argparse.Namespace) -> None:
+    from .crucible import stop_deployment
+
+    print_json(stop_deployment(_crucible_store(), args.deployment_id))
+
+
+def command_crucible_providers(_: argparse.Namespace) -> None:
+    from .crucible import list_provider_capabilities
+
+    print_json(list_provider_capabilities(_crucible_store()))
+
+
+def command_crucible_web(args: argparse.Namespace) -> None:
+    from .crucible_web import serve
+
+    serve(args.host, args.port)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="anygpu")
     parser.add_argument("--version", action="version", version=f"anygpu {__version__}")
@@ -970,6 +1049,44 @@ def build_parser() -> argparse.ArgumentParser:
     runtime_ps.set_defaults(func=command_runtime_ps)
     runtime_cleanup = runtime_sub.add_parser("cleanup")
     runtime_cleanup.set_defaults(func=command_runtime_cleanup)
+
+    crucible = sub.add_parser("crucible")
+    crucible_sub = crucible.add_subparsers(dest="crucible_command", required=True)
+    crucible_signup = crucible_sub.add_parser("signup")
+    crucible_signup.add_argument("--email", required=True)
+    crucible_signup.add_argument("--password", required=True)
+    crucible_signup.add_argument("--role", default="user")
+    crucible_signup.set_defaults(func=command_crucible_signup)
+    crucible_plan = crucible_sub.add_parser("plan")
+    crucible_plan.add_argument("--user-id", required=True)
+    crucible_plan.add_argument("--prompt", required=True)
+    crucible_plan.set_defaults(func=command_crucible_plan)
+    crucible_approve = crucible_sub.add_parser("approve")
+    crucible_approve.add_argument("--plan-id", required=True)
+    crucible_approve.add_argument("--user-id", required=True)
+    crucible_approve.set_defaults(func=command_crucible_approve)
+    crucible_deploy = crucible_sub.add_parser("deploy")
+    crucible_deploy.add_argument("--plan-id", required=True)
+    crucible_deploy.add_argument("--approval-token")
+    crucible_deploy.set_defaults(func=command_crucible_deploy)
+    crucible_status = crucible_sub.add_parser("status")
+    crucible_status.add_argument("--deployment-id", required=True)
+    crucible_status.set_defaults(func=command_crucible_status)
+    crucible_logs = crucible_sub.add_parser("logs")
+    crucible_logs.add_argument("--deployment-id", required=True)
+    crucible_logs.set_defaults(func=command_crucible_logs)
+    crucible_health = crucible_sub.add_parser("health")
+    crucible_health.add_argument("--deployment-id", required=True)
+    crucible_health.set_defaults(func=command_crucible_health)
+    crucible_stop = crucible_sub.add_parser("stop")
+    crucible_stop.add_argument("--deployment-id", required=True)
+    crucible_stop.set_defaults(func=command_crucible_stop)
+    crucible_providers = crucible_sub.add_parser("providers")
+    crucible_providers.set_defaults(func=command_crucible_providers)
+    crucible_web = crucible_sub.add_parser("web")
+    crucible_web.add_argument("--host", default="127.0.0.1")
+    crucible_web.add_argument("--port", type=int, default=8766)
+    crucible_web.set_defaults(func=command_crucible_web)
 
     return parser
 

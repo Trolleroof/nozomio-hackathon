@@ -13,6 +13,64 @@ This repo contains a fully functional local prototype of the production AnyGPU f
 
 State is stored in `ANYGPU_HOME/state.json`. If `ANYGPU_HOME` is unset, the CLI uses `.anygpu/state.json`.
 
+## Crucible Compute demo layer
+
+This repo also includes a dependency-free Crucible Compute demo layer on top of AnyGPU:
+
+- SQLite-backed signup/login/session persistence under `ANYGPU_HOME/crucible.sqlite3`.
+- Natural-language deployment planning for the hackathon demo prompt, including Qwen 7B profiling, provider recommendation, uncertainty, and Nia-style context snippets.
+- Explicit approval gate before any paid GPU launch path.
+- Simulated approved deployment records with endpoint URL, logs, health checks, benchmark data, status, and stop flow.
+- Honest provider capability reporting for Modal, SkyPilot, Lambda Cloud, and CoreWeave based on local credentials/support.
+- HTTP dashboard/API and MCP-style tool dispatcher for personal-agent workflows.
+
+Run the local dashboard/API:
+
+```bash
+export ANYGPU_HOME=.local-anygpu
+python -m anygpu crucible web --host 127.0.0.1 --port 8766
+```
+
+Then open `http://127.0.0.1:8766`.
+
+Run the CLI flow:
+
+```bash
+export ANYGPU_HOME=.local-anygpu
+
+USER_JSON=$(python -m anygpu crucible signup \
+  --email admin@example.com \
+  --password demo-password \
+  --role admin)
+
+USER_ID=$(printf '%s' "$USER_JSON" | python -c 'import json, sys; print(json.load(sys.stdin)["id"])')
+
+PLAN_JSON=$(python -m anygpu crucible plan \
+  --user-id "$USER_ID" \
+  --prompt "Deploy Qwen 7B cheaply. Avoid multi-GPU unless required.")
+
+PLAN_ID=$(printf '%s' "$PLAN_JSON" | python -c 'import json, sys; print(json.load(sys.stdin)["id"])')
+
+python -m anygpu crucible deploy --plan-id "$PLAN_ID"
+
+APPROVAL_JSON=$(python -m anygpu crucible approve \
+  --plan-id "$PLAN_ID" \
+  --user-id "$USER_ID")
+
+APPROVAL_TOKEN=$(printf '%s' "$APPROVAL_JSON" | python -c 'import json, sys; print(json.load(sys.stdin)["token"])')
+
+DEPLOYMENT_JSON=$(python -m anygpu crucible deploy \
+  --plan-id "$PLAN_ID" \
+  --approval-token "$APPROVAL_TOKEN")
+
+DEPLOYMENT_ID=$(printf '%s' "$DEPLOYMENT_JSON" | python -c 'import json, sys; print(json.load(sys.stdin)["id"])')
+
+python -m anygpu crucible status --deployment-id "$DEPLOYMENT_ID"
+python -m anygpu crucible logs --deployment-id "$DEPLOYMENT_ID"
+python -m anygpu crucible health --deployment-id "$DEPLOYMENT_ID"
+python -m anygpu crucible stop --deployment-id "$DEPLOYMENT_ID"
+```
+
 ## Quickstart
 
 ```bash
