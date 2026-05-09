@@ -8,12 +8,115 @@ from .crucible import (
     create_deployment_plan,
     deploy_approved_plan,
     get_deployment,
+    list_provider_capabilities,
     run_health_check,
     stop_deployment,
 )
 
 
 JSON = dict[str, Any]
+
+TOOLS: list[JSON] = [
+    {
+        "name": "crucible_plan_deployment",
+        "description": "Create a GPU deployment plan from a natural-language request.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "userId": {"type": "string"},
+                "prompt": {"type": "string"},
+                "sourceAgent": {"type": "string"},
+            },
+            "required": ["userId", "prompt"],
+        },
+    },
+    {
+        "name": "crucible_approve_plan",
+        "description": "Record explicit human/admin approval before launching GPU resources.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"planId": {"type": "string"}, "userId": {"type": "string"}},
+            "required": ["planId", "userId"],
+        },
+    },
+    {
+        "name": "crucible_deploy_approved_plan",
+        "description": "Deploy an approved plan, enforcing the approval token gate.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"planId": {"type": "string"}, "approvalToken": {"type": "string"}},
+            "required": ["planId"],
+        },
+    },
+    {
+        "name": "crucible_get_deployment_status",
+        "description": "Fetch deployment status and endpoint metadata.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"deploymentId": {"type": "string"}},
+            "required": ["deploymentId"],
+        },
+    },
+    {
+        "name": "crucible_get_logs",
+        "description": "Fetch deployment lifecycle logs.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"deploymentId": {"type": "string"}},
+            "required": ["deploymentId"],
+        },
+    },
+    {
+        "name": "crucible_run_health_check",
+        "description": "Run the stored deployment health-check workflow.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"deploymentId": {"type": "string"}},
+            "required": ["deploymentId"],
+        },
+    },
+    {
+        "name": "crucible_stop_deployment",
+        "description": "Stop a deployment record and append stop logs.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"deploymentId": {"type": "string"}},
+            "required": ["deploymentId"],
+        },
+    },
+    {
+        "name": "crucible_list_deployments",
+        "description": "List known Crucible deployments.",
+        "inputSchema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "crucible_list_provider_capabilities",
+        "description": "List provider launch capability and credential status.",
+        "inputSchema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "crucible_search_context",
+        "description": "Search context snippets used by agent deployment decisions.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"query": {"type": "string"}},
+            "required": ["query"],
+        },
+    },
+    {
+        "name": "crucible_explain_failure",
+        "description": "Explain a deployment failure with relevant context snippets.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"deploymentId": {"type": "string"}, "error": {"type": "string"}},
+            "required": ["deploymentId", "error"],
+        },
+    },
+]
+
+
+def list_tools() -> list[JSON]:
+    return [dict(tool) for tool in TOOLS]
 
 
 def _ok(content: Any) -> JSON:
@@ -118,6 +221,8 @@ def handle_tool_call(store: Any, tool_name: str, arguments: JSON | None = None) 
             return _ok(stop_deployment(store, _require(arguments, "deploymentId")))
         if tool_name == "crucible_list_deployments":
             return _ok(_list_deployments(store))
+        if tool_name == "crucible_list_provider_capabilities":
+            return _ok(list_provider_capabilities(store))
         if tool_name == "crucible_search_context":
             return _ok(_search_context(store, _require(arguments, "query")))
         if tool_name == "crucible_explain_failure":

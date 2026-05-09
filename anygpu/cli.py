@@ -806,10 +806,22 @@ def command_crucible_providers(_: argparse.Namespace) -> None:
     print_json(list_provider_capabilities(_crucible_store()))
 
 
-def command_crucible_web(args: argparse.Namespace) -> None:
-    from .crucible_web import serve
+def command_crucible_mcp_tools(_: argparse.Namespace) -> None:
+    from .crucible_mcp import list_tools
 
-    serve(args.host, args.port)
+    print_json(list_tools())
+
+
+def command_crucible_mcp_call(args: argparse.Namespace) -> None:
+    from .crucible_mcp import handle_tool_call
+
+    try:
+        arguments = json.loads(args.arguments_json)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Invalid --arguments-json: {exc}") from exc
+    if not isinstance(arguments, dict):
+        raise ValueError("--arguments-json must decode to a JSON object")
+    print_json(handle_tool_call(_crucible_store(), args.tool_name, arguments))
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1083,10 +1095,12 @@ def build_parser() -> argparse.ArgumentParser:
     crucible_stop.set_defaults(func=command_crucible_stop)
     crucible_providers = crucible_sub.add_parser("providers")
     crucible_providers.set_defaults(func=command_crucible_providers)
-    crucible_web = crucible_sub.add_parser("web")
-    crucible_web.add_argument("--host", default="127.0.0.1")
-    crucible_web.add_argument("--port", type=int, default=8766)
-    crucible_web.set_defaults(func=command_crucible_web)
+    crucible_mcp_tools = crucible_sub.add_parser("mcp-tools")
+    crucible_mcp_tools.set_defaults(func=command_crucible_mcp_tools)
+    crucible_mcp_call = crucible_sub.add_parser("mcp-call")
+    crucible_mcp_call.add_argument("tool_name")
+    crucible_mcp_call.add_argument("--arguments-json", default="{}")
+    crucible_mcp_call.set_defaults(func=command_crucible_mcp_call)
 
     return parser
 
