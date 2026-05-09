@@ -1,0 +1,231 @@
+from __future__ import annotations
+
+import json
+import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from typing import Any
+import urllib.error
+import urllib.request
+
+from .config import load_config
+from .domain import record_usage
+from .provider import DockerProvider
+from .state import edit_state, load_state
+
+
+def _json_response(
+    handler: BaseHTTPRequestHandler,
+    status: int,
+    body: dict[str, Any],
+    headers: dict[str, str] | None = None,
+) -> None:
+    encoded = json.dumps(body).encode()
+    handler.send_response(status)
+    handler.send_header("Content-Type", "application/json")
+    for key, value in (headers or {}).items():
+        handler.send_header(key, value)
+    handler.send_header("Content-Length", str(len(encoded)))
+    handler.end_headers()
+    handler.wfile.write(encoded)
+
+
+def _count_tokens(text: str) -> int:
+    return max(1, len(text.split()))
+
+
+def _chat_text(payload: dict[str, Any]) -> str:
+    if "messages" in payload:
+        return " ".join(str(message.get("content", "")) for message in payload["messages"])
+    return str(payload.get("prompt", ""))
+
+
+def _completion(deployment_name: str, payload: dict[str, Any]) -> tuple[dict[str, Any], int, int]:
+    prompt = _chat_text(payload)
+    prompt_tokens = _count_tokens(prompt)
+    content = (
+        f"AnyGPU local gateway routed {deployment_name} through a verified deployment route. "
+        f"Received: {prompt[:120] or 'empty prompt'}"
+    )
+    completion_tokens = _count_tokens(content)
+    body = {
+        "id": f"chatcmpl-local-{int(time.time() * 1000)}",
+        "object": "chat.completion",
+        "created": int(time.time()),
+        "model": deployment_name,
+        "choices": [
+            {
+                "index": 0,
+                "message": {"role": "assistant", "content": content},
+                "finish_reason": "stop",
+            }
+        ],
+        "usage": {
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": prompt_tokens + completion_tokens,
+        },
+    }
+    return body, prompt_tokens, completion_tokens
+
+
+def _route_headers(deployment_name: str, route: dict[str, Any]) -> dict[str, str]:
+    route_name = "local" if route.get("pool") == "local" else route["route"]
+    return {
+        "x-anygpu-deployment": deployment_name,
+        "x-anygpu-route": route_name,
+        "x-anygpu-runtime": route["runtime"],
+        "x-anygpu-simulated": str(bool(route.get("simulated", True))).lower(),
+        "x-anygpu-upstream": route.get("upstream_url") or route.get("runtime_url") or "",
+    }
+
+
+def _proxy_to_runtime(
+    runtime_url: str,
+    path: str,
+    payload: dict[str, Any],
+    retry_seconds: float = 30.0,
+) -> tuple[int, dict[str, Any], dict[str, str]]:
+    request = urllib.request.Request(
+        f"{runtime_url}{path}",
+        data=json.dumps(payload).encode(),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    deadline = time.time() + retry_seconds
+    while True:
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                body = json.loads(response.read().decode())
+                skipped = {"content-length", "content-type", "server", "date", "connection", "transfer-encoding"}
+                headers = {key: value for key, value in response.headers.items() if key.lower() not in skipped}
+                return response.status, body, headers
+        except urllib.error.HTTPError as exc:
+            if exc.code == 503 and time.time() < deadline:
+                time.sleep(0.5)
+                continue
+            try:
+                body = json.loads(exc.read().decode())
+            except json.JSONDecodeError:
+                body = {"error": str(exc)}
+            return exc.code, body, {}
+        except urllib.error.URLError as exc:
+            if time.time() < deadline:
+                time.sleep(0.5)
+                continue
+            return 502, {"error": f"runtime_unavailable: {exc.reason}"}, {}
+
+
+def _refresh_deployment_health(state: dict[str, Any], deployment: dict[str, Any]) -> None:
+    if deployment.get("provider") != "docker":
+        return
+    process = deployment.get("runtime_process")
+    if not process or deployment.get("health") == "stopped":
+        return
+    health = DockerProvider(load_config(state.get("config", {}))).health_check(process)
+    process["health"] = "healthy" if health["healthy"] else health["status"]
+    deployment["health"] = process["health"]
+    for route in deployment.get("routes", []):
+        route["status"] = process["health"]
+
+
+class AnyGPUGatewayHandler(BaseHTTPRequestHandler):
+    server_version = "AnyGPULocalGateway/0.1"
+
+    def log_message(self, format: str, *args: Any) -> None:
+        return
+
+    def do_GET(self) -> None:
+        if self.path == "/healthz":
+            state = load_state()
+            deployments = [
+                name for name, deployment in state["deployments"].items() if deployment.get("health") == "healthy"
+            ]
+            _json_response(self, 200, {"status": "ok", "deployments": deployments})
+            return
+        _json_response(self, 404, {"error": "not_found"})
+
+    def do_POST(self) -> None:
+        if self.path not in {"/v1/chat/completions", "/v1/completions"}:
+            _json_response(self, 404, {"error": "not_found"})
+            return
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            payload = json.loads(self.rfile.read(length).decode() or "{}")
+        except json.JSONDecodeError:
+            _json_response(self, 400, {"error": "invalid_json"})
+            return
+        deployment_name = str(payload.get("model", ""))
+        start = time.perf_counter()
+        with edit_state() as state:
+            deployment = state["deployments"].get(deployment_name)
+            if not deployment:
+                _json_response(self, 404, {"error": f"unknown deployment {deployment_name}"})
+                return
+            _refresh_deployment_health(state, deployment)
+            healthy_routes = [route for route in deployment["routes"] if route["status"] == "healthy"]
+            if not healthy_routes:
+                _json_response(self, 503, {"error": f"deployment {deployment_name} has no healthy routes"})
+                return
+            route = healthy_routes[0]
+            metadata_headers = _route_headers(deployment_name, route)
+            if not route.get("simulated", True) and route.get("runtime_url"):
+                status, body, upstream_headers = _proxy_to_runtime(route["runtime_url"], self.path, payload)
+                usage = body.get("usage", {})
+                prompt_tokens = int(usage.get("prompt_tokens", _count_tokens(_chat_text(payload))))
+                completion_tokens = int(usage.get("completion_tokens", 1))
+                latency_ms = max(1, int((time.perf_counter() - start) * 1000))
+                record_usage(state, deployment_name, prompt_tokens, completion_tokens, latency_ms)
+                headers = {**upstream_headers, **metadata_headers}
+                _json_response(self, status, body, headers)
+                return
+            body, prompt_tokens, completion_tokens = _completion(deployment_name, payload)
+            latency_ms = max(1, int((time.perf_counter() - start) * 1000) + route["p95_ms"])
+            record_usage(state, deployment_name, prompt_tokens, completion_tokens, latency_ms)
+        if payload.get("stream"):
+            self._stream_response(body, metadata_headers)
+            return
+        _json_response(self, 200, body, metadata_headers)
+
+    def _stream_response(self, body: dict[str, Any], headers: dict[str, str]) -> None:
+        content = body["choices"][0]["message"]["content"]
+        chunks = [
+            {
+                "id": body["id"],
+                "object": "chat.completion.chunk",
+                "created": body["created"],
+                "model": body["model"],
+                "choices": [{"index": 0, "delta": {"content": content}, "finish_reason": None}],
+            },
+            {
+                "id": body["id"],
+                "object": "chat.completion.chunk",
+                "created": body["created"],
+                "model": body["model"],
+                "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
+            },
+        ]
+        encoded = "".join(f"data: {json.dumps(chunk)}\n\n" for chunk in chunks) + "data: [DONE]\n\n"
+        data = encoded.encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        for key, value in headers.items():
+            self.send_header(key, value)
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+
+def make_server(host: str, port: int) -> ThreadingHTTPServer:
+    return ThreadingHTTPServer((host, port), AnyGPUGatewayHandler)
+
+
+def serve(host: str, port: int) -> None:
+    server = make_server(host, port)
+    print(f"AnyGPU gateway listening on http://{host}:{port}")
+    print(f"OpenAI-compatible endpoint: http://{host}:{port}/v1/chat/completions")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.server_close()
