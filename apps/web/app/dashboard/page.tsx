@@ -2,6 +2,7 @@ import { ArrowRight, BookOpenText, Rocket, ServerCog } from "lucide-react";
 import Link from "next/link";
 
 import { AppFrame } from "@/components/app-frame";
+import { EndpointConsole } from "@/components/endpoint-console";
 import { StatusBadge } from "@/components/status-badge";
 import { formatDateTime } from "@/lib/format";
 import { contextSnippets, deployments, generatedPlan, providerCapabilities } from "@crucible/shared/fixtures";
@@ -63,6 +64,8 @@ export default function DashboardPage() {
       </div>
 
       <div className="mt-4 grid gap-4 md:grid-cols-3">
+        <EndpointConsole />
+
         <section className="crucible-card">
           <h2 className="text-lg font-semibold tracking-tight">Quick deployment</h2>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">{generatedPlan.prompt}</p>
