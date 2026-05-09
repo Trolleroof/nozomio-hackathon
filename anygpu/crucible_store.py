@@ -83,6 +83,105 @@ class CrucibleStore:
                     record_json text not null,
                     updated_at text not null
                 );
+
+                create table if not exists rl_experiment_branches (
+                    name text primary key,
+                    parent_branch text,
+                    status text not null,
+                    schema_snapshot_json text not null,
+                    merge_note text,
+                    created_at text not null,
+                    merged_at text
+                );
+
+                create table if not exists rl_environment_contracts (
+                    id text primary key,
+                    name text not null,
+                    version integer not null,
+                    branch_name text not null,
+                    env_spec_json text not null,
+                    observation_schema_json text not null,
+                    action_schema_json text not null,
+                    reward_spec_json text not null,
+                    pass_criteria_json text not null,
+                    created_at text not null
+                );
+
+                create table if not exists rl_run_capsules (
+                    id text primary key,
+                    user_id text not null references users(id),
+                    env_contract_id text not null references rl_environment_contracts(id),
+                    branch_name text not null,
+                    prompt text not null,
+                    source_agent text not null,
+                    status text not null,
+                    provider text,
+                    provider_offers_json text not null,
+                    cost_estimate_json text not null,
+                    approval_token text,
+                    logs_json text not null,
+                    metrics_json text not null,
+                    audit_json text not null,
+                    model_artifact_uri text,
+                    created_at text not null,
+                    updated_at text not null
+                );
+
+                create table if not exists rl_compute_approvals (
+                    id text primary key,
+                    run_id text not null references rl_run_capsules(id),
+                    approved_by text not null references users(id),
+                    provider text not null,
+                    budget_usd real not null,
+                    max_runtime_minutes integer not null,
+                    teardown_policy_json text not null,
+                    token text not null unique,
+                    status text not null,
+                    signed_at text not null
+                );
+
+                create table if not exists rl_compute_memory (
+                    id text primary key,
+                    run_id text references rl_run_capsules(id),
+                    provider text not null,
+                    gpu_name text,
+                    region text,
+                    event_type text not null,
+                    status text not null,
+                    summary text not null,
+                    pricing_json text not null,
+                    compatibility_json text not null,
+                    created_at text not null
+                );
+
+                create table if not exists rl_training_events (
+                    id text primary key,
+                    run_id text not null references rl_run_capsules(id),
+                    channel text not null,
+                    phase text not null,
+                    rollout_count integer,
+                    reward_mean real,
+                    success_rate real,
+                    cost_burn_usd real,
+                    gpu_name text,
+                    message text not null,
+                    created_at text not null
+                );
+
+                create table if not exists rl_run_artifacts (
+                    id text primary key,
+                    run_id text not null references rl_run_capsules(id),
+                    kind text not null,
+                    uri text not null,
+                    storage_bucket text,
+                    metadata_json text not null,
+                    passed integer not null,
+                    gpu_name text,
+                    cost_usd real,
+                    reward_delta real,
+                    success_rate_delta real,
+                    created_at text not null
+                );
                 """
             )
 

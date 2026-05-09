@@ -13,6 +13,20 @@ from .crucible import (
     run_health_check,
     stop_deployment,
 )
+from .insforge_compute import (
+    ApprovalRequiredError as InsForgeApprovalRequiredError,
+    approve_gpu_run,
+    create_experiment_branch,
+    create_environment_contract,
+    launch_gpu_run,
+    list_run_capsules,
+    merge_experiment_branch,
+    publish_run_artifact,
+    recommend_next_gpu_run,
+    record_compute_memory,
+    record_training_event,
+    request_gpu_run,
+)
 
 
 JSON = dict[str, Any]
@@ -111,6 +125,157 @@ TOOLS: list[JSON] = [
             "type": "object",
             "properties": {"deploymentId": {"type": "string"}, "error": {"type": "string"}},
             "required": ["deploymentId", "error"],
+        },
+    },
+    {
+        "name": "crucible_create_experiment_branch",
+        "description": "Create an isolated InsForge-style experiment branch for RL environment or workflow changes.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "parentBranch": {"type": "string"},
+                "schemaSnapshot": {"type": "object"},
+            },
+            "required": ["name"],
+        },
+    },
+    {
+        "name": "crucible_merge_experiment_branch",
+        "description": "Mark an experiment branch as merged after its schema or environment contract changes are validated.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "mergeNote": {"type": "string"},
+            },
+            "required": ["name", "mergeNote"],
+        },
+    },
+    {
+        "name": "crucible_create_environment_contract",
+        "description": "Create an agent-readable RL environment contract with observation, action, reward, and pass criteria schemas.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "envSpec": {"type": "object"},
+                "observationSchema": {"type": "object"},
+                "actionSchema": {"type": "object"},
+                "rewardSpec": {"type": "object"},
+                "passCriteria": {"type": "object"},
+                "branchName": {"type": "string"},
+            },
+            "required": ["name", "envSpec", "observationSchema", "actionSchema", "rewardSpec", "passCriteria"],
+        },
+    },
+    {
+        "name": "crucible_request_gpu_run",
+        "description": "Create a durable InsForge-style RL/GPU run capsule that cannot launch until approved.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "userId": {"type": "string"},
+                "prompt": {"type": "string"},
+                "envContractId": {"type": "string"},
+                "providerOffers": {"type": "array", "items": {"type": "object"}},
+                "costEstimate": {"type": "object"},
+                "sourceAgent": {"type": "string"},
+            },
+            "required": ["userId", "prompt", "envContractId", "providerOffers", "costEstimate"],
+        },
+    },
+    {
+        "name": "crucible_list_run_capsules",
+        "description": "List durable InsForge-style RL/GPU run capsules for agent planning.",
+        "inputSchema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "crucible_approve_gpu_run",
+        "description": "Create the signed approval ledger row required before a paid RL/GPU run launches.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "runId": {"type": "string"},
+                "approvedBy": {"type": "string"},
+                "provider": {"type": "string"},
+                "budgetUsd": {"type": "number"},
+                "maxRuntimeMinutes": {"type": "integer"},
+                "teardownPolicy": {"type": "object"},
+            },
+            "required": ["runId", "approvedBy", "provider", "budgetUsd", "maxRuntimeMinutes", "teardownPolicy"],
+        },
+    },
+    {
+        "name": "crucible_launch_gpu_run",
+        "description": "Mark an RL/GPU run capsule launched only after validating its signed approval token.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"runId": {"type": "string"}, "approvalToken": {"type": "string"}},
+            "required": ["runId", "approvalToken"],
+        },
+    },
+    {
+        "name": "crucible_record_training_event",
+        "description": "Append realtime-style training progress for an RL/GPU run capsule.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "runId": {"type": "string"},
+                "phase": {"type": "string"},
+                "rolloutCount": {"type": "integer"},
+                "rewardMean": {"type": "number"},
+                "successRate": {"type": "number"},
+                "costBurnUsd": {"type": "number"},
+                "gpuName": {"type": "string"},
+                "message": {"type": "string"},
+            },
+            "required": ["runId", "phase"],
+        },
+    },
+    {
+        "name": "crucible_record_compute_memory",
+        "description": "Persist provider pricing, quota, compatibility, or run outcome evidence for future agents.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "runId": {"type": "string"},
+                "provider": {"type": "string"},
+                "gpuName": {"type": "string"},
+                "region": {"type": "string"},
+                "eventType": {"type": "string"},
+                "status": {"type": "string"},
+                "summary": {"type": "string"},
+                "pricing": {"type": "object"},
+                "compatibility": {"type": "object"},
+            },
+            "required": ["provider", "eventType", "status", "summary"],
+        },
+    },
+    {
+        "name": "crucible_publish_run_artifact",
+        "description": "Attach storage artifact metadata and audit fields to an RL/GPU run capsule.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "runId": {"type": "string"},
+                "kind": {"type": "string"},
+                "uri": {"type": "string"},
+                "metadata": {"type": "object"},
+                "storageBucket": {"type": "string"},
+            },
+            "required": ["runId", "kind", "uri", "metadata"],
+        },
+    },
+    {
+        "name": "crucible_recommend_next_gpu_run",
+        "description": "Ask the backend for the cheapest verified next RL/GPU run based on stored capsules and artifacts.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "envContractId": {"type": "string"},
+                "objective": {"type": "string"},
+            },
         },
     },
     {
@@ -281,6 +446,118 @@ def handle_tool_call(store: Any, tool_name: str, arguments: JSON | None = None) 
                     _require(arguments, "error"),
                 )
             )
+        if tool_name == "crucible_create_experiment_branch":
+            return _ok(
+                create_experiment_branch(
+                    store,
+                    name=_require(arguments, "name"),
+                    parent_branch=arguments.get("parentBranch") or "main",
+                    schema_snapshot=arguments.get("schemaSnapshot") or {},
+                )
+            )
+        if tool_name == "crucible_merge_experiment_branch":
+            return _ok(
+                merge_experiment_branch(
+                    store,
+                    _require(arguments, "name"),
+                    merge_note=_require(arguments, "mergeNote"),
+                )
+            )
+        if tool_name == "crucible_create_environment_contract":
+            return _ok(
+                create_environment_contract(
+                    store,
+                    name=_require(arguments, "name"),
+                    env_spec=_require(arguments, "envSpec"),
+                    observation_schema=_require(arguments, "observationSchema"),
+                    action_schema=_require(arguments, "actionSchema"),
+                    reward_spec=_require(arguments, "rewardSpec"),
+                    pass_criteria=_require(arguments, "passCriteria"),
+                    branch_name=arguments.get("branchName") or "main",
+                )
+            )
+        if tool_name == "crucible_request_gpu_run":
+            return _ok(
+                request_gpu_run(
+                    store,
+                    user_id=_require(arguments, "userId"),
+                    prompt=_require(arguments, "prompt"),
+                    env_contract_id=_require(arguments, "envContractId"),
+                    provider_offers=_require(arguments, "providerOffers"),
+                    cost_estimate=_require(arguments, "costEstimate"),
+                    source_agent=arguments.get("sourceAgent") or "mcp",
+                )
+            )
+        if tool_name == "crucible_list_run_capsules":
+            return _ok(list_run_capsules(store))
+        if tool_name == "crucible_approve_gpu_run":
+            return _ok(
+                approve_gpu_run(
+                    store,
+                    run_id=_require(arguments, "runId"),
+                    approved_by=_require(arguments, "approvedBy"),
+                    provider=_require(arguments, "provider"),
+                    budget_usd=float(_require(arguments, "budgetUsd")),
+                    max_runtime_minutes=int(_require(arguments, "maxRuntimeMinutes")),
+                    teardown_policy=_require(arguments, "teardownPolicy"),
+                )
+            )
+        if tool_name == "crucible_launch_gpu_run":
+            return _ok(
+                launch_gpu_run(
+                    store,
+                    _require(arguments, "runId"),
+                    approval_token=_require(arguments, "approvalToken"),
+                )
+            )
+        if tool_name == "crucible_record_training_event":
+            return _ok(
+                record_training_event(
+                    store,
+                    run_id=_require(arguments, "runId"),
+                    phase=_require(arguments, "phase"),
+                    rollout_count=arguments.get("rolloutCount"),
+                    reward_mean=arguments.get("rewardMean"),
+                    success_rate=arguments.get("successRate"),
+                    cost_burn_usd=arguments.get("costBurnUsd"),
+                    gpu_name=arguments.get("gpuName"),
+                    message=arguments.get("message") or "",
+                )
+            )
+        if tool_name == "crucible_record_compute_memory":
+            return _ok(
+                record_compute_memory(
+                    store,
+                    run_id=arguments.get("runId"),
+                    provider=_require(arguments, "provider"),
+                    gpu_name=arguments.get("gpuName"),
+                    region=arguments.get("region"),
+                    event_type=_require(arguments, "eventType"),
+                    status=_require(arguments, "status"),
+                    summary=_require(arguments, "summary"),
+                    pricing=arguments.get("pricing"),
+                    compatibility=arguments.get("compatibility"),
+                )
+            )
+        if tool_name == "crucible_publish_run_artifact":
+            return _ok(
+                publish_run_artifact(
+                    store,
+                    run_id=_require(arguments, "runId"),
+                    kind=_require(arguments, "kind"),
+                    uri=_require(arguments, "uri"),
+                    metadata=_require(arguments, "metadata"),
+                    storage_bucket=arguments.get("storageBucket") or "rl-runs",
+                )
+            )
+        if tool_name == "crucible_recommend_next_gpu_run":
+            return _ok(
+                recommend_next_gpu_run(
+                    store,
+                    env_contract_id=arguments.get("envContractId"),
+                    objective=arguments.get("objective") or "cheapest_verified_improving",
+                )
+            )
         if tool_name == "crucible_create_tensorlake_sandbox":
             adapter = _tensorlake_adapter()
             create_args: dict[str, Any] = {}
@@ -315,7 +592,7 @@ def handle_tool_call(store: Any, tool_name: str, arguments: JSON | None = None) 
         if tool_name == "crucible_list_tensorlake_sandboxes":
             return _ok(_tensorlake_adapter().list_sandboxes())
         return _error(f"Unknown Crucible MCP tool: {tool_name}")
-    except ApprovalRequiredError as exc:
+    except (ApprovalRequiredError, InsForgeApprovalRequiredError) as exc:
         return _error(str(exc))
     except ValueError as exc:
         return _error(str(exc))
