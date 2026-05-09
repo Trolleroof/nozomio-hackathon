@@ -71,6 +71,7 @@ def _prepare_provider_environment() -> None:
 
 
 def _tensorlake_adapter():
+    _load_local_dotenv()
     return importlib.import_module("anygpu.tensorlake_sandbox")
 
 
@@ -383,6 +384,93 @@ def terminate_tensorlake_sandbox(sandbox_id: Optional[str] = None, name: Optiona
         _tensorlake_adapter().terminate_sandbox(sandbox_id=sandbox_id, name=name),
         indent=2,
     )
+
+
+@mcp.tool()
+def create_vcpu_host(
+    name: str,
+    image: str = "tensorlake/ubuntu-minimal",
+    cpus: float = 1.0,
+    memory_mb: int = 2048,
+    disk_mb: int = 10240,
+    timeout_secs: int = 3600,
+) -> str:
+    """Create a Tensorlake vCPU MicroVM for autonomous agent work or site hosting."""
+    return json.dumps(
+        _tensorlake_adapter().create_vcpu_host(
+            name=name,
+            image=image,
+            cpus=cpus,
+            memory_mb=memory_mb,
+            disk_mb=disk_mb,
+            timeout_secs=timeout_secs,
+        ),
+        indent=2,
+    )
+
+
+@mcp.tool()
+def run_vcpu_command(
+    command: str,
+    sandbox_id: Optional[str] = None,
+    name: Optional[str] = None,
+    args: Optional[list[str]] = None,
+    timeout: Optional[float] = None,
+) -> str:
+    """Run a command inside a Tensorlake vCPU host."""
+    return json.dumps(
+        _tensorlake_adapter().run_vcpu_command(
+            sandbox_id=sandbox_id,
+            name=name,
+            command=command,
+            args=args,
+            timeout=timeout,
+        ),
+        indent=2,
+    )
+
+
+@mcp.tool()
+def start_site(
+    command: str,
+    port: int,
+    sandbox_id: Optional[str] = None,
+    name: Optional[str] = None,
+    working_dir: Optional[str] = None,
+    public: bool = True,
+) -> str:
+    """Start a long-running site command in a vCPU host and expose its port."""
+    return json.dumps(
+        _tensorlake_adapter().start_site(
+            sandbox_id=sandbox_id,
+            name=name,
+            command=command,
+            port=port,
+            working_dir=working_dir,
+            public=public,
+        ),
+        indent=2,
+    )
+
+
+@mcp.tool()
+def expose_site_port(
+    port: int,
+    sandbox_id: Optional[str] = None,
+    name: Optional[str] = None,
+    public: bool = True,
+) -> str:
+    """Expose a vCPU host port through Tensorlake networking."""
+    return json.dumps(
+        _tensorlake_adapter().expose_site_port(sandbox_id=sandbox_id, name=name, port=port, public=public),
+        indent=2,
+    )
+
+
+@mcp.tool()
+def get_site_status(sandbox_id: Optional[str] = None, name: Optional[str] = None, port: Optional[int] = None) -> str:
+    """Return status and public URL metadata for a vCPU-hosted site."""
+    return json.dumps(_tensorlake_adapter().get_site_status(sandbox_id=sandbox_id, name=name, port=port), indent=2)
 
 
 if __name__ == "__main__":
