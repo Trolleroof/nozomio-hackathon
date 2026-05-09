@@ -300,6 +300,13 @@ def list_provider_capabilities(store: CrucibleStore) -> list[dict[str, Any]]:
             notes="Provider catalog entry only; no direct launch adapter is enabled here.",
         ),
         _provider_record(
+            "Vast.ai",
+            configured=bool(os.environ.get("VAST_AI_API_KEY") or os.environ.get("ANYGPU_VAST_API_KEY")),
+            supports_openai_endpoint=True,
+            credential_names=["VAST_AI_API_KEY", "ANYGPU_VAST_API_KEY"],
+            notes="Marketplace launch adapter is available when Vast credentials are configured.",
+        ),
+        _provider_record(
             "Tensorlake",
             configured=bool(os.environ.get("TENSORLAKE_API_KEY")),
             supports_openai_endpoint=False,
