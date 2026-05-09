@@ -1,0 +1,10 @@
+{
+  "name": "@crucible/shared",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    "./crucible-contract": "./src/crucible-contract.ts",
+    "./fixtures": "./src/fixtures.ts"
+  }
+}

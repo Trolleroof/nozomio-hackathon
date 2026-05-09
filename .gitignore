@@ -1,0 +1,11 @@
+node_modules/
+.next/
+test-results/
+playwright-report/
+
+apps/*/node_modules/
+apps/*/.next/
+apps/*/test-results/
+apps/*/playwright-report/
+
+.DS_Store
