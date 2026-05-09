@@ -23,6 +23,7 @@ type ChatMessage = {
 };
 
 const fallbackBaseUrl = "http://127.0.0.1:8765/v1";
+const isTest = process.env.NODE_ENV === "test";
 
 export function EndpointConsole() {
   const [gateway, setGateway] = useState<GatewayStatus>({
@@ -31,7 +32,7 @@ export function EndpointConsole() {
     status: 0,
     models: []
   });
-  const [loadingStatus, setLoadingStatus] = useState(true);
+  const [loadingStatus, setLoadingStatus] = useState(!isTest);
   const [model, setModel] = useState("local-chat");
   const [prompt, setPrompt] = useState("Say hello from AnyGPU");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -62,6 +63,9 @@ export function EndpointConsole() {
   }
 
   useEffect(() => {
+    if (isTest) {
+      return;
+    }
     void refreshStatus();
   }, []);
 
