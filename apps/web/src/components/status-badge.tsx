@@ -38,7 +38,7 @@ export function StatusBadge({
 }) {
   return (
     <span
-      className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${
+      className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-medium uppercase tracking-[0.08em] ${
         toneByStatus[status] ?? "border-border bg-surface-raised text-muted-foreground"
       }`}
     >
