@@ -1,12 +1,13 @@
 import Link from "next/link";
 
+import { BrandMark } from "@/components/brand-mark";
+
 export default function LoginPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-background px-6 py-10 text-foreground">
       <section className="w-full max-w-sm">
-        <Link href="/" className="block text-sm font-medium tracking-tight">
-          <span className="crucible-gradient-text">Crucible</span>
-          <span className="text-foreground/85"> Compute</span>
+        <Link href="/" className="inline-flex items-center">
+          <BrandMark iconClassName="h-8 w-8" />
         </Link>
         <h1 className="mt-8 text-2xl font-medium tracking-tight">Log in</h1>
         <form className="mt-8 space-y-4">

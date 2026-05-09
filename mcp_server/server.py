@@ -33,7 +33,17 @@ from .providers import fetch_lambda, fetch_runpod, fetch_vast, fetch_modal
 from . import deploy as deploy_module
 from . import monitor
 
-mcp = FastMCP("gpu-cheapest", stateless_http=True, json_response=True)
+
+def _create_mcp() -> FastMCP:
+    try:
+        return FastMCP("gpu-cheapest", stateless_http=True, json_response=True)
+    except TypeError as exc:
+        if "unexpected keyword argument" not in str(exc):
+            raise
+        return FastMCP("gpu-cheapest")
+
+
+mcp = _create_mcp()
 
 # In-memory state — single active deployment per server session
 _active: Optional[DeployedInstance] = None
@@ -100,6 +110,7 @@ def _register_anygpu_gateway_route(
     created_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     endpoint_url = instance.endpoint_url.rstrip("/")
     runtime_url = endpoint_url.removesuffix("/v1")
+    upstream_chat_url = f"{endpoint_url}/chat/completions"
     route = {
         "role": "primary",
         "route": f"mcp:{instance.provider}:{instance.instance_id}",
@@ -127,7 +138,7 @@ def _register_anygpu_gateway_route(
             "endpoint": "openai",
             "gateway": contract,
             "url": contract["chat_completions_url"],
-            "upstream_url": f"{runtime_url}/v1/chat/completions",
+            "upstream_url": upstream_chat_url,
             "health": "healthy",
             "created_at": created_at,
             "runtime_process": {
@@ -147,7 +158,7 @@ def _register_anygpu_gateway_route(
         "base_url": contract["base_url"],
         "model": contract["model"],
         "chat_completions_url": contract["chat_completions_url"],
-        "upstream_url": f"{runtime_url}/v1/chat/completions",
+        "upstream_url": upstream_chat_url,
     }
 
 

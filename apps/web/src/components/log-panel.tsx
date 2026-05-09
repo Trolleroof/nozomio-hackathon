@@ -3,7 +3,7 @@ import type { DeploymentLog } from "@crucible/shared/crucible-contract";
 import { StatusBadge } from "@/components/status-badge";
 import { formatDateTime } from "@/lib/format";
 
-const secretPattern = /(sk-[A-Za-z0-9_-]+|hf_[A-Za-z0-9_]+|VAST_AI_API_KEY(?:=[^\s]+)?)/g;
+const secretPattern = /(sk-[A-Za-z0-9_-]+|hf_[A-Za-z0-9_]+|nk_[A-Za-z0-9_-]+|(?:VAST_AI_API_KEY|NIA_API_KEY)(?:=[^\s]+)?)/g;
 
 function redact(message: string) {
   return message.replace(secretPattern, "[redacted]");
