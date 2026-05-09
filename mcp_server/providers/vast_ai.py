@@ -1,3 +1,4 @@
+import json
 import os
 import httpx
 from typing import List
@@ -24,7 +25,8 @@ async def fetch() -> List[GpuOffer]:
         resp = await client.get(
             f"{BASE_URL}/bundles",
             headers={"Authorization": f"Bearer {api_key}"},
-            params={"q": str(params["q"])},
+            params={"q": json.dumps(params["q"])},
+            follow_redirects=True,
             timeout=15,
         )
         resp.raise_for_status()
