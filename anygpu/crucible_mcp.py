@@ -321,6 +321,79 @@ TOOLS: list[JSON] = [
         "description": "List Tensorlake sandboxes visible to the configured API key.",
         "inputSchema": {"type": "object", "properties": {}},
     },
+    {
+        "name": "crucible_create_vcpu_host",
+        "description": "Create a Tensorlake vCPU MicroVM for autonomous agent work or site hosting.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "image": {"type": "string"},
+                "cpus": {"type": "number"},
+                "memoryMb": {"type": "integer"},
+                "diskMb": {"type": "integer"},
+                "timeoutSecs": {"type": "integer"},
+            },
+            "required": ["name"],
+        },
+    },
+    {
+        "name": "crucible_run_vcpu_command",
+        "description": "Run a command inside a Tensorlake vCPU host.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "sandboxId": {"type": "string"},
+                "name": {"type": "string"},
+                "command": {"type": "string"},
+                "args": {"type": "array", "items": {"type": "string"}},
+                "timeoutSecs": {"type": "number"},
+            },
+            "required": ["command"],
+        },
+    },
+    {
+        "name": "crucible_start_site",
+        "description": "Start a long-running site command in a vCPU host and expose its port.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "sandboxId": {"type": "string"},
+                "name": {"type": "string"},
+                "command": {"type": "string"},
+                "port": {"type": "integer"},
+                "workingDir": {"type": "string"},
+                "public": {"type": "boolean"},
+            },
+            "required": ["command", "port"],
+        },
+    },
+    {
+        "name": "crucible_expose_site_port",
+        "description": "Expose a vCPU host port through Tensorlake networking.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "sandboxId": {"type": "string"},
+                "name": {"type": "string"},
+                "port": {"type": "integer"},
+                "public": {"type": "boolean"},
+            },
+            "required": ["port"],
+        },
+    },
+    {
+        "name": "crucible_get_site_status",
+        "description": "Return status and public URL metadata for a vCPU-hosted site.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "sandboxId": {"type": "string"},
+                "name": {"type": "string"},
+                "port": {"type": "integer"},
+            },
+        },
+    },
 ]
 
 
@@ -591,6 +664,56 @@ def handle_tool_call(store: Any, tool_name: str, arguments: JSON | None = None) 
             )
         if tool_name == "crucible_list_tensorlake_sandboxes":
             return _ok(_tensorlake_adapter().list_sandboxes())
+        if tool_name == "crucible_create_vcpu_host":
+            adapter = _tensorlake_adapter()
+            return _ok(
+                adapter.create_vcpu_host(
+                    name=_require(arguments, "name"),
+                    image=arguments.get("image") or "tensorlake/ubuntu-minimal",
+                    cpus=arguments.get("cpus", 1.0),
+                    memory_mb=arguments.get("memoryMb", 2048),
+                    disk_mb=arguments.get("diskMb", 10240),
+                    timeout_secs=arguments.get("timeoutSecs", 3600),
+                )
+            )
+        if tool_name == "crucible_run_vcpu_command":
+            return _ok(
+                _tensorlake_adapter().run_vcpu_command(
+                    sandbox_id=arguments.get("sandboxId"),
+                    name=arguments.get("name"),
+                    command=_require(arguments, "command"),
+                    args=arguments.get("args"),
+                    timeout=arguments.get("timeoutSecs"),
+                )
+            )
+        if tool_name == "crucible_start_site":
+            return _ok(
+                _tensorlake_adapter().start_site(
+                    sandbox_id=arguments.get("sandboxId"),
+                    name=arguments.get("name"),
+                    command=_require(arguments, "command"),
+                    port=int(_require(arguments, "port")),
+                    working_dir=arguments.get("workingDir"),
+                    public=arguments.get("public", True),
+                )
+            )
+        if tool_name == "crucible_expose_site_port":
+            return _ok(
+                _tensorlake_adapter().expose_site_port(
+                    sandbox_id=arguments.get("sandboxId"),
+                    name=arguments.get("name"),
+                    port=int(_require(arguments, "port")),
+                    public=arguments.get("public", True),
+                )
+            )
+        if tool_name == "crucible_get_site_status":
+            return _ok(
+                _tensorlake_adapter().get_site_status(
+                    sandbox_id=arguments.get("sandboxId"),
+                    name=arguments.get("name"),
+                    port=arguments.get("port"),
+                )
+            )
         return _error(f"Unknown Crucible MCP tool: {tool_name}")
     except (ApprovalRequiredError, InsForgeApprovalRequiredError) as exc:
         return _error(str(exc))
