@@ -11,27 +11,27 @@ export function ContextPanel({ snippets }: { snippets: NiaContextSnippet[] }) {
 
   return (
     <section className="space-y-6">
-      <div className="rounded-md border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-700">
+      <div className="rounded-md border border-forge/40 bg-forge/10 p-4 text-sm text-forge">
         Nia is not connected. The app will continue with cached repo context.
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
-        <div className="rounded-md border border-zinc-200 bg-white p-5">
+        <div className="crucible-card">
           <div className="flex items-center gap-2 text-sm font-medium">
-            <BookOpenText aria-hidden="true" className="h-4 w-4" />
+            <BookOpenText aria-hidden="true" className="h-4 w-4 text-forge" />
             Indexed sources
           </div>
           <p className="mt-3 text-3xl font-semibold">{snippets.length}</p>
-          <p className="mt-1 text-sm text-zinc-500">Last sync {formatDateTime(lastSync)}</p>
+          <p className="mt-1 text-sm text-muted-foreground">Last sync {formatDateTime(lastSync)}</p>
         </div>
-        <div className="rounded-md border border-zinc-200 bg-white p-5 md:col-span-2">
+        <div className="crucible-card md:col-span-2">
           <div className="flex items-center gap-2 text-sm font-medium">
-            <Search aria-hidden="true" className="h-4 w-4" />
+            <Search aria-hidden="true" className="h-4 w-4 text-accent" />
             Recent Nia searches
           </div>
           <div className="mt-3 flex flex-wrap gap-2 text-sm">
             {snippets.map((snippet) => (
-              <span key={snippet.id} className="rounded-full border border-zinc-200 px-3 py-1">
+              <span key={snippet.id} className="rounded-full border border-border bg-surface-raised px-3 py-1 text-muted-foreground">
                 {snippet.usedFor}
               </span>
             ))}
@@ -43,10 +43,10 @@ export function ContextPanel({ snippets }: { snippets: NiaContextSnippet[] }) {
         <h2 className="text-lg font-semibold tracking-tight">Context snippets used in agent decisions</h2>
         <div className="mt-4 grid gap-4 md:grid-cols-2">
           {snippets.map((snippet) => (
-            <article key={snippet.id} className="rounded-md border border-zinc-200 bg-white p-5">
+            <article key={snippet.id} className="crucible-card">
               <div className="text-sm font-semibold">{snippet.title}</div>
-              <p className="mt-2 text-sm leading-6 text-zinc-600">{snippet.excerpt}</p>
-              <p className="mt-4 text-xs text-zinc-500">{snippet.source}</p>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">{snippet.excerpt}</p>
+              <p className="mt-4 font-mono text-xs text-muted-foreground">{snippet.source}</p>
             </article>
           ))}
         </div>

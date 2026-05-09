@@ -27,7 +27,9 @@ export function DeploymentTimeline({ status }: { status: DeploymentStatus }) {
           <li
             key={step.status}
             className={`flex items-center gap-3 rounded-md border p-3 ${
-              isCurrent ? "border-zinc-950 bg-zinc-950 text-white" : "border-zinc-200 bg-white text-zinc-700"
+              isCurrent
+                ? "border-accent bg-accent text-accent-foreground"
+                : "border-border bg-surface text-muted-foreground"
             }`}
           >
             <Icon aria-hidden="true" className={`h-4 w-4 ${step.status === "provisioning" && isCurrent ? "animate-spin" : ""}`} />

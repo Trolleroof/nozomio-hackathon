@@ -4,10 +4,10 @@ export function PlaygroundPanel({ deployment }: { deployment: Deployment }) {
   const isReady = deployment.status === "ready";
 
   return (
-    <section className="rounded-md border border-zinc-200 bg-white p-5">
+    <section className="crucible-card">
       <div className="mb-4 flex items-center justify-between gap-4">
         <h2 className="text-lg font-semibold tracking-tight">Playground</h2>
-        <span className="text-xs text-zinc-500">{deployment.modelId}</span>
+        <span className="text-xs text-muted-foreground">{deployment.modelId}</span>
       </div>
       {isReady ? (
         <form className="space-y-3">
@@ -16,18 +16,18 @@ export function PlaygroundPanel({ deployment }: { deployment: Deployment }) {
           </label>
           <textarea
             id="playground-prompt"
-            className="min-h-28 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-zinc-950"
+            className="crucible-textarea min-h-28 w-full"
             defaultValue="Summarize the deployment health in one sentence."
           />
           <button
-            className="inline-flex min-h-10 items-center rounded-md bg-zinc-950 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800"
+            className="crucible-primary min-h-10"
             type="button"
           >
             Send test request
           </button>
         </form>
       ) : (
-        <div className="rounded-md border border-dashed border-zinc-300 bg-zinc-50 p-4 text-sm text-zinc-600">
+        <div className="rounded-md border border-dashed border-border bg-muted p-4 text-sm text-muted-foreground">
           Playground unlocks after health checks pass.
         </div>
       )}

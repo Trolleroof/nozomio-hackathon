@@ -32,12 +32,12 @@ export default function NewDeploymentPage() {
   return (
     <AppFrame>
       <div className="mb-8">
-        <p className="text-sm text-zinc-500">Mock planning, real contract shape</p>
+        <p className="crucible-eyebrow">Mock planning, real contract shape</p>
         <h1 className="mt-1 text-3xl font-semibold tracking-tight">New deployment</h1>
       </div>
 
       <div className="grid gap-5 lg:grid-cols-[0.95fr_1.05fr]">
-        <section className="rounded-md border border-zinc-200 bg-white p-5">
+        <section className="crucible-card">
           <div className="space-y-5">
             <div>
               <label className="block text-sm font-medium" htmlFor="deployment-request">
@@ -45,7 +45,7 @@ export default function NewDeploymentPage() {
               </label>
               <textarea
                 id="deployment-request"
-                className="mt-2 min-h-32 w-full rounded-md border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-zinc-950"
+                className="crucible-textarea mt-2 min-h-32 w-full"
                 value={prompt}
                 onChange={(event) => setPrompt(event.target.value)}
               />
@@ -56,7 +56,7 @@ export default function NewDeploymentPage() {
               </label>
               <input
                 id="model-id"
-                className="mt-2 min-h-11 w-full rounded-md border border-zinc-300 px-3 text-sm outline-none focus:border-zinc-950"
+                className="crucible-input mt-2 min-h-11 w-full"
                 value={modelId}
                 onChange={(event) => setModelId(event.target.value)}
               />
@@ -68,7 +68,9 @@ export default function NewDeploymentPage() {
                   <label
                     key={item.value}
                     className={`flex min-h-10 cursor-pointer items-center justify-center rounded-md border px-3 text-sm ${
-                      objective === item.value ? "border-zinc-950 bg-zinc-950 text-white" : "border-zinc-300 bg-white"
+                      objective === item.value
+                        ? "border-accent bg-accent text-accent-foreground"
+                        : "border-border bg-surface-raised text-muted-foreground hover:text-foreground"
                     }`}
                   >
                     <input
@@ -90,7 +92,7 @@ export default function NewDeploymentPage() {
               </label>
               <select
                 id="stop-policy"
-                className="mt-2 min-h-11 w-full rounded-md border border-zinc-300 px-3 text-sm outline-none focus:border-zinc-950"
+                className="crucible-input mt-2 min-h-11 w-full"
                 value={stopPolicy}
                 onChange={(event) => setStopPolicy(event.target.value)}
               >
@@ -100,7 +102,7 @@ export default function NewDeploymentPage() {
               </select>
             </div>
             <button
-              className="inline-flex min-h-11 items-center gap-2 rounded-md bg-zinc-950 px-5 py-2 text-sm font-medium text-white hover:bg-zinc-800"
+              className="crucible-primary min-h-11 gap-2 px-5"
               type="button"
               onClick={handleGenerate}
             >
@@ -110,48 +112,48 @@ export default function NewDeploymentPage() {
           </div>
         </section>
 
-        <section className="rounded-md border border-zinc-200 bg-zinc-50 p-5">
+        <section className="crucible-card-muted">
           <h2 className="text-lg font-semibold tracking-tight">Plan preview</h2>
           {plan ? (
             <div className="mt-4 space-y-4">
               <div className="flex flex-wrap items-center gap-3">
                 <StatusBadge status="approval_required">Approval required</StatusBadge>
-                <span className="text-sm text-zinc-600">Paid GPU launch needs human approval before provisioning.</span>
+                <span className="text-sm text-muted-foreground">Paid GPU launch needs human approval before provisioning.</span>
               </div>
               <dl className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-md border border-zinc-200 bg-white p-4">
-                  <dt className="text-xs uppercase tracking-wide text-zinc-500">Provider</dt>
+                <div className="crucible-card-compact">
+                  <dt className="text-xs uppercase tracking-wide text-muted-foreground">Provider</dt>
                   <dd className="mt-1 font-medium">{plan.recommendation.provider}</dd>
                 </div>
-                <div className="rounded-md border border-zinc-200 bg-white p-4">
-                  <dt className="text-xs uppercase tracking-wide text-zinc-500">Accelerator</dt>
+                <div className="crucible-card-compact">
+                  <dt className="text-xs uppercase tracking-wide text-muted-foreground">Accelerator</dt>
                   <dd className="mt-1 font-medium">{plan.recommendation.accelerator}</dd>
                 </div>
-                <div className="rounded-md border border-zinc-200 bg-white p-4">
-                  <dt className="text-xs uppercase tracking-wide text-zinc-500">Estimate</dt>
+                <div className="crucible-card-compact">
+                  <dt className="text-xs uppercase tracking-wide text-muted-foreground">Estimate</dt>
                   <dd className="mt-1 font-medium">{formatCurrency(plan.recommendation.estimatedHourlyUsd)}/hr</dd>
                 </div>
-                <div className="rounded-md border border-zinc-200 bg-white p-4">
-                  <dt className="text-xs uppercase tracking-wide text-zinc-500">Model</dt>
+                <div className="crucible-card-compact">
+                  <dt className="text-xs uppercase tracking-wide text-muted-foreground">Model</dt>
                   <dd className="mt-1 break-words font-medium">{plan.modelId}</dd>
                 </div>
               </dl>
-              <div className="rounded-md border border-zinc-200 bg-white p-4">
+              <div className="crucible-card-compact">
                 <div className="flex items-center gap-2 text-sm font-medium">
-                  <BadgeDollarSign aria-hidden="true" className="h-4 w-4" />
+                  <BadgeDollarSign aria-hidden="true" className="h-4 w-4 text-accent" />
                   Recommendation
                 </div>
-                <p className="mt-2 text-sm leading-6 text-zinc-600">{plan.recommendation.reason}</p>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">{plan.recommendation.reason}</p>
               </div>
-              <div className="rounded-md border border-zinc-200 bg-white p-4">
+              <div className="crucible-card-compact">
                 <div className="flex items-center gap-2 text-sm font-medium">
-                  <AlertTriangle aria-hidden="true" className="h-4 w-4" />
+                  <AlertTriangle aria-hidden="true" className="h-4 w-4 text-forge" />
                   Uncertainty
                 </div>
-                <p className="mt-2 text-sm leading-6 text-zinc-600">{plan.recommendation.uncertainty}</p>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">{plan.recommendation.uncertainty}</p>
               </div>
               <button
-                className="inline-flex min-h-10 items-center gap-2 rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium"
+                className="crucible-secondary min-h-10 gap-2"
                 type="button"
               >
                 <ShieldCheck aria-hidden="true" className="h-4 w-4" />
@@ -159,7 +161,7 @@ export default function NewDeploymentPage() {
               </button>
             </div>
           ) : (
-            <div className="mt-4 rounded-md border border-dashed border-zinc-300 bg-white p-5 text-sm text-zinc-600">
+            <div className="mt-4 rounded-md border border-dashed border-border bg-surface p-5 text-sm text-muted-foreground">
               Generate a plan to see provider choice, GPU estimate, uncertainty, and the approval gate.
             </div>
           )}

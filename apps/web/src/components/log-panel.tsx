@@ -11,16 +11,16 @@ function redact(message: string) {
 
 export function LogPanel({ logs }: { logs: DeploymentLog[] }) {
   return (
-    <div className="overflow-hidden rounded-md border border-zinc-200 bg-zinc-950 text-zinc-100">
-      <div className="border-b border-zinc-800 px-4 py-3 text-sm font-medium">Logs</div>
-      <div className="divide-y divide-zinc-800">
+    <div className="overflow-hidden rounded-md border border-border bg-code text-foreground">
+      <div className="border-b border-border px-4 py-3 text-sm font-medium">Logs</div>
+      <div className="divide-y divide-border">
         {logs.map((log) => (
           <div key={log.id} className="grid gap-2 px-4 py-3 text-sm md:grid-cols-[150px_80px_1fr]">
-            <time className="text-zinc-400">{formatDateTime(log.timestamp)}</time>
+            <time className="font-mono text-muted-foreground">{formatDateTime(log.timestamp)}</time>
             <span>
               <StatusBadge status={log.level}>{log.level}</StatusBadge>
             </span>
-            <p className="m-0 text-zinc-200">{redact(log.message)}</p>
+            <p className="m-0 text-foreground">{redact(log.message)}</p>
           </div>
         ))}
       </div>
