@@ -8,7 +8,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-from anygpu.gateway import _refresh_deployment_health, make_server
+from anygpu.gateway import _proxy_to_runtime, _refresh_deployment_health, make_server
 from anygpu.state import initial_state
 
 
@@ -103,6 +103,43 @@ def post_json_error(url: str, payload: dict) -> tuple[int, dict, dict]:
 def get_json(url: str) -> dict:
     with urllib.request.urlopen(url, timeout=5) as response:
         return json.loads(response.read().decode())
+
+
+def test_gateway_forwards_upstream_api_key(monkeypatch) -> None:
+    captured = {}
+
+    class FakeResponse:
+        status = 200
+        headers = {}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def read(self) -> bytes:
+            return json.dumps({"id": "chatcmpl-test", "choices": [], "usage": {}}).encode()
+
+    def fake_urlopen(request, timeout):
+        captured["url"] = request.full_url
+        captured["timeout"] = timeout
+        captured["authorization"] = request.get_header("Authorization")
+        return FakeResponse()
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+
+    status, _body, _headers = _proxy_to_runtime(
+        "http://127.0.0.1:8000",
+        "/v1/chat/completions",
+        {"model": "local-chat", "messages": []},
+        upstream_api_key="secret-upstream-key",
+        retry_seconds=0,
+    )
+
+    assert status == 200
+    assert captured["url"] == "http://127.0.0.1:8000/v1/chat/completions"
+    assert captured["authorization"] == "Bearer secret-upstream-key"
 
 
 def test_gateway_refreshes_docker_route_health_before_selection(monkeypatch) -> None:

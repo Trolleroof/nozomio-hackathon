@@ -2,6 +2,7 @@ import asyncio
 import importlib
 import json
 import os
+from datetime import datetime, timezone
 from typing import Optional
 
 try:
@@ -38,6 +39,27 @@ mcp = FastMCP("gpu-cheapest", stateless_http=True, json_response=True)
 _active: Optional[DeployedInstance] = None
 
 
+def _load_local_dotenv() -> None:
+    path = os.environ.get("ANYGPU_ENV_FILE", ".env")
+    if not os.path.exists(path):
+        return
+    with open(path) as handle:
+        for line in handle:
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#") or "=" not in stripped:
+                continue
+            key, value = stripped.split("=", 1)
+            key = key.strip()
+            if key and key not in os.environ:
+                os.environ[key] = value.strip().strip("'\"")
+
+
+def _prepare_provider_environment() -> None:
+    _load_local_dotenv()
+    if "VAST_API_KEY" not in os.environ and "VAST_AI_API_KEY" in os.environ:
+        os.environ["VAST_API_KEY"] = os.environ["VAST_AI_API_KEY"]
+
+
 def _tensorlake_adapter():
     return importlib.import_module("anygpu.tensorlake_sandbox")
 
@@ -67,6 +89,68 @@ def _anygpu_gateway_endpoint() -> Optional[dict]:
     return endpoint
 
 
+def _register_anygpu_gateway_route(
+    instance: DeployedInstance,
+    deployment_name: str = "local-chat",
+    served_model: str = "qwen",
+) -> dict:
+    domain = importlib.import_module("anygpu.domain")
+    state_module = importlib.import_module("anygpu.state")
+    contract = domain.gateway_contract(deployment_name)
+    created_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    endpoint_url = instance.endpoint_url.rstrip("/")
+    runtime_url = endpoint_url.removesuffix("/v1")
+    route = {
+        "role": "primary",
+        "route": f"mcp:{instance.provider}:{instance.instance_id}",
+        "pool": f"mcp:{instance.provider}",
+        "runtime": "vllm",
+        "status": "healthy",
+        "simulated": False,
+        "real": True,
+        "upstream_url": runtime_url,
+        "runtime_url": runtime_url,
+        "upstream_api_key": instance.api_key,
+        "p95_ms": 0,
+        "tokens_per_sec": 0,
+        "estimated_cost": instance.price_per_hr,
+    }
+    with state_module.edit_state() as state:
+        state["deployments"][deployment_name] = {
+            "name": deployment_name,
+            "kind": "mcp-runtime",
+            "provider": instance.provider,
+            "compute": f"mcp:{instance.provider}",
+            "model": served_model,
+            "model_source": deploy_module.MODEL_ID,
+            "runtime": "vllm",
+            "endpoint": "openai",
+            "gateway": contract,
+            "url": contract["chat_completions_url"],
+            "upstream_url": f"{runtime_url}/chat/completions",
+            "health": "healthy",
+            "created_at": created_at,
+            "runtime_process": {
+                "provider": instance.provider,
+                "instance_id": instance.instance_id,
+                "gpu_type": instance.gpu_type,
+                "region": instance.region,
+                "price_per_hr": instance.price_per_hr,
+                "upstream_url": runtime_url,
+                "endpoint_url": endpoint_url,
+                "api_key": instance.api_key,
+                "health": "healthy",
+            },
+            "routes": [route],
+        }
+    return {
+        "base_url": contract["base_url"],
+        "model": contract["model"],
+        "chat_completions_url": contract["chat_completions_url"],
+        "upstream_url": f"{runtime_url}/chat/completions",
+    }
+
+
 def _configure_http_transport() -> None:
     mcp.settings.host = os.environ.get("MCP_HOST", "127.0.0.1")
     mcp.settings.port = int(os.environ.get("MCP_PORT", "8000"))
@@ -87,6 +171,7 @@ async def list_gpu_prices(min_vram_gb: int = 16, top_n: int = 10) -> str:
         min_vram_gb: Minimum VRAM required (default 16 GB for Qwen 2.5-7B).
         top_n: How many offers to return (default 10).
     """
+    _prepare_provider_environment()
     results = await asyncio.gather(
         fetch_lambda(),
         fetch_runpod(),
@@ -124,6 +209,7 @@ async def check_availability(provider: Optional[str] = None, min_vram_gb: int = 
         provider: Filter to a specific provider ("lambda", "runpod", "vast", "modal"). Omit for all.
         min_vram_gb: Minimum VRAM filter.
     """
+    _prepare_provider_environment()
     fetchers = {
         "lambda": fetch_lambda,
         "runpod": fetch_runpod,
@@ -157,6 +243,7 @@ async def deploy_cheapest(min_vram_gb: int = 16, provider: Optional[str] = None)
     if _active is not None:
         return json.dumps({"error": "An instance is already running. Call teardown() first."})
 
+    _prepare_provider_environment()
     fetchers = [fetch_lambda, fetch_runpod, fetch_vast, fetch_modal]
     results = await asyncio.gather(*[f() for f in fetchers], return_exceptions=True)
 
@@ -177,6 +264,7 @@ async def deploy_cheapest(min_vram_gb: int = 16, provider: Optional[str] = None)
 
     instance = await deploy_module.deploy(best)
     _active = instance
+    gateway = _register_anygpu_gateway_route(instance)
 
     return json.dumps({
         "status": "deployed",
@@ -184,7 +272,8 @@ async def deploy_cheapest(min_vram_gb: int = 16, provider: Optional[str] = None)
         "instance_id": instance.instance_id,
         "gpu_type": instance.gpu_type,
         "price_per_hr": instance.price_per_hr,
-        "endpoint_url": instance.endpoint_url,
+        "gateway": gateway,
+        "upstream_endpoint_url": instance.endpoint_url,
         "api_key": instance.api_key,
     }, indent=2)
 

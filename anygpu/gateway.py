@@ -67,12 +67,16 @@ def _proxy_to_runtime(
     runtime_url: str,
     path: str,
     payload: dict[str, Any],
+    upstream_api_key: str | None = None,
     retry_seconds: float = 30.0,
 ) -> tuple[int, dict[str, Any], dict[str, str]]:
+    headers = {"Content-Type": "application/json"}
+    if upstream_api_key:
+        headers["Authorization"] = f"Bearer {upstream_api_key}"
     request = urllib.request.Request(
         f"{runtime_url}{path}",
         data=json.dumps(payload).encode(),
-        headers={"Content-Type": "application/json"},
+        headers=headers,
         method="POST",
     )
     deadline = time.time() + retry_seconds
@@ -214,7 +218,17 @@ class AnyGPUGatewayHandler(BaseHTTPRequestHandler):
                 )
                 return
             if not route.get("simulated", True) and route.get("runtime_url"):
-                status, body, upstream_headers = _proxy_to_runtime(route["runtime_url"], self.path, payload)
+                upstream_api_key = (
+                    route.get("upstream_api_key")
+                    or deployment.get("runtime_process", {}).get("api_key")
+                    or deployment.get("upstream_api_key")
+                )
+                status, body, upstream_headers = _proxy_to_runtime(
+                    route["runtime_url"],
+                    self.path,
+                    payload,
+                    upstream_api_key=upstream_api_key,
+                )
                 usage = body.get("usage", {})
                 prompt_tokens = int(usage.get("prompt_tokens", _count_tokens(_chat_text(payload))))
                 completion_tokens = int(usage.get("completion_tokens", 1))

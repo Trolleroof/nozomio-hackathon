@@ -33,12 +33,13 @@ def _generate_api_key() -> str:
     return secrets.token_urlsafe(32)
 
 
-async def _wait_for_endpoint(url: str, timeout: int = 600) -> bool:
+async def _wait_for_endpoint(url: str, api_key: Optional[str] = None, timeout: int = 600) -> bool:
+    headers = {"Authorization": f"Bearer {api_key}"} if api_key else None
     deadline = time.time() + timeout
     async with httpx.AsyncClient() as client:
         while time.time() < deadline:
             try:
-                resp = await client.get(f"{url}/models", timeout=5)
+                resp = await client.get(f"{url}/models", headers=headers, timeout=5)
                 if resp.status_code == 200:
                     return True
             except Exception:
@@ -78,7 +79,7 @@ async def _deploy_lambda(offer: GpuOffer, vllm_api_key: str, bootstrap: str) -> 
     await _ssh_bootstrap(ip, bootstrap)
 
     endpoint = f"http://{ip}:{VLLM_PORT}/v1"
-    await _wait_for_endpoint(endpoint)
+    await _wait_for_endpoint(endpoint, api_key=vllm_api_key)
 
     return DeployedInstance(
         provider="lambda",
@@ -150,7 +151,7 @@ async def _deploy_runpod(offer: GpuOffer, vllm_api_key: str) -> DeployedInstance
         pod = resp.json().get("data", {}).get("podFindAndDeployOnDemand", {})
 
     pod_id = pod["id"]
-    endpoint = await _poll_runpod_endpoint(pod_id)
+    endpoint = await _poll_runpod_endpoint(pod_id, vllm_api_key)
 
     return DeployedInstance(
         provider="runpod",
@@ -164,7 +165,7 @@ async def _deploy_runpod(offer: GpuOffer, vllm_api_key: str) -> DeployedInstance
     )
 
 
-async def _poll_runpod_endpoint(pod_id: str, timeout: int = 600) -> str:
+async def _poll_runpod_endpoint(pod_id: str, vllm_api_key: str, timeout: int = 600) -> str:
     import httpx as _httpx
     api_key = os.environ["RUNPOD_API_KEY"]
     query = """
@@ -190,7 +191,7 @@ async def _poll_runpod_endpoint(pod_id: str, timeout: int = 600) -> str:
                     ip = port_info["ip"]
                     public_port = port_info["publicPort"]
                     url = f"http://{ip}:{public_port}/v1"
-                    if await _wait_for_endpoint(url, timeout=60):
+                    if await _wait_for_endpoint(url, api_key=vllm_api_key, timeout=60):
                         return url
         await asyncio.sleep(20)
     raise TimeoutError(f"RunPod pod {pod_id} endpoint never became available")
@@ -203,7 +204,7 @@ async def _deploy_vast(offer: GpuOffer, vllm_api_key: str, bootstrap: str) -> De
     await _ssh_bootstrap(ip, bootstrap, port=port)
 
     endpoint = f"http://{ip}:{VLLM_PORT}/v1"
-    await _wait_for_endpoint(endpoint)
+    await _wait_for_endpoint(endpoint, api_key=vllm_api_key)
 
     return DeployedInstance(
         provider="vast",
@@ -250,7 +251,7 @@ async def _deploy_modal(offer: GpuOffer, vllm_api_key: str) -> DeployedInstance:
     for line in result.stdout.splitlines():
         if "https://" in line and "modal.run" in line:
             endpoint = line.strip().split()[-1].rstrip("/") + "/v1"
-            await _wait_for_endpoint(endpoint)
+            await _wait_for_endpoint(endpoint, api_key=vllm_api_key)
             return DeployedInstance(
                 provider="modal",
                 instance_id="modal:qwen-vllm",
