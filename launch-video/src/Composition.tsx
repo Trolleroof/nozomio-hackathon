@@ -14,14 +14,15 @@ export const FPS = 30;
 // ---- Timing (seconds) ----
 const T = {
   hook: 7,
-  logo: 6,
+  logo: 7,
   agent: 10,
   approval: 10,
   providers: 8,
+  accelerators: 7,
   dashboard: 10,
-  stack: 8,
+  stack: 9,
   reliability: 5,
-  cta: 5,
+  cta: 6,
 };
 // Slowdown factor applied to per-scene element delays so internal
 // animations breathe along with the scene length.
@@ -863,7 +864,76 @@ const SceneProviders: React.FC = () => {
   );
 };
 
-// ============== Scene 6 — Live Dashboard ==============
+// ============== Scene 6 — GPU Accelerator Agnosticism ==============
+const AcceleratorChip: React.FC<{
+  name: string;
+  icon: string;
+  delay: number;
+}> = ({ name, icon, delay }) => {
+  const ap = useAppear(delay, delay + 14);
+  return (
+    <div
+      style={{
+        ...ap,
+        padding: "16px 24px",
+        borderRadius: 16,
+        border: `1px solid ${C.border}`,
+        background: C.surface,
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+      }}
+    >
+      <span style={{ fontSize: 24 }}>{icon}</span>
+      <span style={{ fontSize: 18, fontWeight: 600 }}>{name}</span>
+    </div>
+  );
+};
+
+const SceneAccelerators: React.FC = () => {
+  return (
+    <SceneWrap>
+      <AbsoluteFill style={{ alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 36 }}>
+        <div style={useAppear(0, 12)}>
+          <Eyebrow>Hardware-agnostic execution</Eyebrow>
+        </div>
+        <div
+          style={{
+            ...useAppear(4, 22),
+            fontSize: 64,
+            fontWeight: 700,
+            letterSpacing: "-0.03em",
+            textAlign: "center",
+          }}
+        >
+          Run on <Gradient>any GPU.</Gradient>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginTop: 8 }}>
+          <AcceleratorChip name="NVIDIA" icon="🟢" delay={20} />
+          <AcceleratorChip name="AMD" icon="🔴" delay={28} />
+          <AcceleratorChip name="Apple Silicon" icon="🍎" delay={36} />
+          <AcceleratorChip name="Intel Arc" icon="🔵" delay={44} />
+        </div>
+        <div
+          style={{
+            ...useAppear(52, 72),
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            color: C.fgDim,
+            fontSize: 18,
+            fontFamily: MONO,
+            marginTop: 8,
+          }}
+        >
+          <span style={{ color: C.success }}>✓</span> L4 · A10 · A40 · A100 · H100 · RTX · GTX · Mi300
+        </div>
+      </AbsoluteFill>
+    </SceneWrap>
+  );
+};
+
+// ============== Scene 7 — Live Dashboard ==============
 const StatusChip: React.FC<{ status: "ready" | "approval_required" | "failed" | "deploying" }> = ({
   status,
 }) => {
@@ -1024,7 +1094,7 @@ const SceneDashboard: React.FC = () => {
   );
 };
 
-// ============== Scene 7 — Stack Diagram (Full-Stack Depth) ==============
+// ============== Scene 8 — Stack Diagram (Full-Stack Depth) ==============
 const StackNode: React.FC<{
   label: string;
   sub?: string;
@@ -1150,7 +1220,7 @@ const SceneStack: React.FC = () => {
   );
 };
 
-// ============== Scene 8 — Reliability metrics ==============
+// ============== Scene 9 — Reliability metrics ==============
 const Metric: React.FC<{ value: string; label: string; delay: number; hue: string }> = ({
   value,
   label,
@@ -1217,7 +1287,7 @@ const SceneReliability: React.FC = () => {
   );
 };
 
-// ============== Scene 9 — CTA ==============
+// ============== Scene 10 — CTA ==============
 const SceneCTA: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -1312,6 +1382,7 @@ export const CrucibleLaunch: React.FC = () => {
       <Sequence {...seq(sec(T.agent))} layout="none"><SceneAgent /></Sequence>
       <Sequence {...seq(sec(T.approval))} layout="none"><SceneApproval /></Sequence>
       <Sequence {...seq(sec(T.providers))} layout="none"><SceneProviders /></Sequence>
+      <Sequence {...seq(sec(T.accelerators))} layout="none"><SceneAccelerators /></Sequence>
       <Sequence {...seq(sec(T.dashboard))} layout="none"><SceneDashboard /></Sequence>
       <Sequence {...seq(sec(T.stack))} layout="none"><SceneStack /></Sequence>
       <Sequence {...seq(sec(T.reliability))} layout="none"><SceneReliability /></Sequence>
