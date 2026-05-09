@@ -18,5 +18,8 @@ dependencies = [
 [project.scripts]
 anygpu = "anygpu.cli:main"
 
+[tool.setuptools]
+packages = ["anygpu", "mcp_server", "mcp_server.providers"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -38,10 +38,15 @@ export function listApiTokens() {
 }
 
 export function generateDeploymentPlan(input: GenerateDeploymentPlanInput): Promise<DeploymentPlan> {
-  return Promise.resolve({
-    ...generatedPlan,
-    prompt: input.prompt || generatedPlan.prompt,
-    modelId: input.modelId || generatedPlan.modelId,
-    objective: input.objective
+  return fetch("/api/crucible/plan", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input)
+  }).then(async (response) => {
+    const body = await response.json();
+    if (!response.ok) {
+      throw new Error(body.error || "Plan generation failed.");
+    }
+    return body as DeploymentPlan;
   });
 }

@@ -1,8 +1,41 @@
+"use client";
+
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import type { FormEvent } from "react";
+import { useState } from "react";
 
 import { BrandMark } from "@/components/brand-mark";
 
 export default function SignupPage() {
+  const router = useRouter();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [status, setStatus] = useState<"idle" | "submitting">("idle");
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setStatus("submitting");
+    setError(null);
+    try {
+      const response = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password })
+      });
+      const body = await response.json();
+      if (!response.ok) {
+        throw new Error(body.error || "Signup failed.");
+      }
+      router.push("/dashboard");
+    } catch (signupError) {
+      setError(signupError instanceof Error ? signupError.message : "Signup failed.");
+    } finally {
+      setStatus("idle");
+    }
+  }
+
   return (
     <main className="flex min-h-screen items-center justify-center bg-background px-6 py-10 text-foreground">
       <section className="w-full max-w-sm">
@@ -10,21 +43,39 @@ export default function SignupPage() {
           <BrandMark iconClassName="h-8 w-8" />
         </Link>
         <h1 className="mt-8 text-2xl font-medium tracking-tight">Create account</h1>
-        <form className="mt-8 space-y-4">
+        <form className="mt-8 space-y-4" onSubmit={handleSubmit}>
           <div>
             <label className="block text-sm font-medium" htmlFor="email">
               Email
             </label>
-            <input id="email" className="crucible-input mt-1.5 min-h-10 w-full" type="email" />
+            <input
+              id="email"
+              autoComplete="email"
+              className="crucible-input mt-1.5 min-h-10 w-full"
+              onChange={(event) => setEmail(event.target.value)}
+              required
+              type="email"
+              value={email}
+            />
           </div>
           <div>
             <label className="block text-sm font-medium" htmlFor="password">
               Password
             </label>
-            <input id="password" className="crucible-input mt-1.5 min-h-10 w-full" type="password" />
+            <input
+              id="password"
+              autoComplete="new-password"
+              className="crucible-input mt-1.5 min-h-10 w-full"
+              minLength={8}
+              onChange={(event) => setPassword(event.target.value)}
+              required
+              type="password"
+              value={password}
+            />
           </div>
-          <button className="crucible-primary mt-2 min-h-10 w-full" type="submit">
-            Create account
+          {error ? <p className="text-sm text-ember">{error}</p> : null}
+          <button className="crucible-primary mt-2 min-h-10 w-full" disabled={status === "submitting"} type="submit">
+            {status === "submitting" ? "Creating" : "Create account"}
           </button>
         </form>
         <p className="mt-6 text-sm text-muted-foreground">

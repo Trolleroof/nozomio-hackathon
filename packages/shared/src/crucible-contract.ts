@@ -64,6 +64,7 @@ export interface DeploymentPlan {
   approvalReason: string;
   status: "generated" | "needs_clarification" | "error";
   createdAt: string;
+  memoryInsights?: string[];
 }
 
 export interface DeploymentLog {

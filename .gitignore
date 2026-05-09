@@ -15,6 +15,7 @@ apps/*/playwright-report/
 
 .anygpu/
 .local-anygpu*/
+.insforge/
 
 __pycache__/
 *.py[cod]
@@ -26,3 +27,18 @@ venv/
 build/
 dist/
 *.egg-info/
+
+# InsForge & AI agent skills
+.insforge
+.agent
+.agents
+.augment
+.claude
+.cline
+.github/copilot*
+.kilocode
+.qoder
+.qwen
+.roo
+.trae
+.windsurf

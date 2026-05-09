@@ -1,7 +1,7 @@
 "use client";
 
 import type { DeploymentObjective, DeploymentPlan } from "@crucible/shared/crucible-contract";
-import { Cpu, ShieldCheck } from "lucide-react";
+import { CircleCheck, Cpu, ShieldCheck, TriangleAlert } from "lucide-react";
 import { useState } from "react";
 
 import { AppFrame } from "@/components/app-frame";
@@ -23,10 +23,47 @@ export default function NewDeploymentPage() {
   const [objective, setObjective] = useState<DeploymentObjective>("cheapest");
   const [stopPolicy, setStopPolicy] = useState("manual");
   const [plan, setPlan] = useState<DeploymentPlan | null>(null);
+  const [memoryStatus, setMemoryStatus] = useState<string | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function handleGenerate() {
-    const nextPlan = await generateDeploymentPlan({ prompt, modelId, objective, stopPolicy });
-    setPlan(nextPlan);
+    setIsGenerating(true);
+    setError(null);
+    try {
+      const nextPlan = await generateDeploymentPlan({ prompt, modelId, objective, stopPolicy });
+      setPlan(nextPlan);
+      setMemoryStatus(null);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Plan generation failed.");
+    } finally {
+      setIsGenerating(false);
+    }
+  }
+
+  async function handleRemember(outcome: "ready" | "failed") {
+    if (!plan) {
+      return;
+    }
+    setMemoryStatus("Saving memory...");
+    const lesson = outcome === "failed"
+      ? `${plan.recommendation.provider} ${plan.recommendation.accelerator} failed or was rejected for ${plan.modelId}; avoid repeating without a new health signal.`
+      : `${plan.recommendation.provider} ${plan.recommendation.accelerator} worked for ${plan.modelId}; prefer it when the objective matches.`;
+    const response = await fetch("/api/crucible/memory", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ plan, outcome, lesson })
+    });
+    const body = await response.json();
+    if (!response.ok) {
+      setMemoryStatus(body.error || "Memory update failed.");
+      return;
+    }
+    setPlan({
+      ...plan,
+      memoryInsights: Array.isArray(body.memoryInsights) ? body.memoryInsights : plan.memoryInsights
+    });
+    setMemoryStatus("Saved to session memory.");
   }
 
   return (
@@ -96,16 +133,25 @@ export default function NewDeploymentPage() {
               className="crucible-primary min-h-11 gap-2 px-5"
               type="button"
               onClick={handleGenerate}
+              disabled={isGenerating}
             >
               <Cpu aria-hidden="true" className="h-4 w-4" />
-              Generate plan
+              {isGenerating ? "Generating plan" : "Generate plan"}
             </button>
           </div>
         </section>
 
         <section className="crucible-card-muted">
           <h2 className="text-lg font-semibold tracking-tight">Plan preview</h2>
-          {plan ? (
+          {isGenerating ? (
+            <div className="mt-4 max-w-md text-sm leading-6 text-muted-foreground">
+              Generating plan with live NIA context and session memory.
+            </div>
+          ) : error ? (
+            <div className="mt-4 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm leading-6 text-destructive">
+              {error}
+            </div>
+          ) : plan ? (
             <div className="mt-4 space-y-5">
               <div className="flex flex-wrap items-center gap-3">
                 <StatusBadge status="approval_required">Approval required</StatusBadge>
@@ -137,6 +183,18 @@ export default function NewDeploymentPage() {
                 <h3 className="text-sm font-medium">Uncertainty</h3>
                 <p className="mt-1 text-sm leading-6 text-muted-foreground">{plan.recommendation.uncertainty}</p>
               </div>
+              {plan.memoryInsights?.length ? (
+                <div>
+                  <h3 className="text-sm font-medium">Session memory</h3>
+                  <div className="mt-2 space-y-2">
+                    {plan.memoryInsights.map((insight) => (
+                      <p key={insight} className="rounded-md border border-border bg-muted p-3 text-sm leading-6 text-muted-foreground">
+                        {insight}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
               <button
                 className="crucible-secondary min-h-10 gap-2"
                 type="button"
@@ -144,6 +202,25 @@ export default function NewDeploymentPage() {
                 <ShieldCheck aria-hidden="true" className="h-4 w-4" />
                 Request approval
               </button>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  className="crucible-secondary min-h-10 gap-2"
+                  type="button"
+                  onClick={() => handleRemember("ready")}
+                >
+                  <CircleCheck aria-hidden="true" className="h-4 w-4" />
+                  Remember success
+                </button>
+                <button
+                  className="crucible-secondary min-h-10 gap-2"
+                  type="button"
+                  onClick={() => handleRemember("failed")}
+                >
+                  <TriangleAlert aria-hidden="true" className="h-4 w-4" />
+                  Remember failure
+                </button>
+              </div>
+              {memoryStatus ? <p className="text-sm text-muted-foreground">{memoryStatus}</p> : null}
             </div>
           ) : (
             <div className="mt-4 max-w-md text-sm leading-6 text-muted-foreground">

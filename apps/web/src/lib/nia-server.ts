@@ -64,10 +64,10 @@ export async function searchNia(query: string): Promise<NiaSearchResponse> {
       connected: true,
       snippets: snippets.length > 0 ? snippets : contextSnippets
     };
-  } catch {
+  } catch (error) {
     return {
       connected: true,
-      error: "Nia search unavailable; showing cached context.",
+      error: `Nia search unavailable (${safeErrorMessage(error)}); showing cached context.`,
       snippets: contextSnippets
     };
   }
@@ -186,6 +186,11 @@ function clean(value: string, maxLength: number) {
     return cleaned;
   }
   return `${cleaned.slice(0, maxLength - 3).trimEnd()}...`;
+}
+
+function safeErrorMessage(error: unknown) {
+  const message = error instanceof Error ? error.message : "unknown error";
+  return clean(message.replace(/nk_[A-Za-z0-9_-]+/g, "[redacted-nia-key]"), 180);
 }
 
 function getServerEnv(name: string) {
