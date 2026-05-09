@@ -32,7 +32,7 @@ from .providers import fetch_lambda, fetch_runpod, fetch_vast, fetch_modal
 from . import deploy as deploy_module
 from . import monitor
 
-mcp = FastMCP("gpu-cheapest")
+mcp = FastMCP("gpu-cheapest", stateless_http=True, json_response=True)
 
 # In-memory state — single active deployment per server session
 _active: Optional[DeployedInstance] = None
@@ -65,6 +65,18 @@ def _anygpu_gateway_endpoint() -> Optional[dict]:
     if deployment.get("upstream_url"):
         endpoint["upstream_url"] = deployment["upstream_url"]
     return endpoint
+
+
+def _configure_http_transport() -> None:
+    mcp.settings.host = os.environ.get("MCP_HOST", "127.0.0.1")
+    mcp.settings.port = int(os.environ.get("MCP_PORT", "8000"))
+    mcp.settings.stateless_http = True
+    mcp.settings.json_response = True
+    allowed_hosts = os.environ.get("MCP_ALLOWED_HOSTS")
+    if allowed_hosts:
+        mcp.settings.transport_security.allowed_hosts = [
+            host.strip() for host in allowed_hosts.split(",") if host.strip()
+        ]
 
 
 @mcp.tool()
@@ -274,4 +286,14 @@ def terminate_tensorlake_sandbox(sandbox_id: Optional[str] = None, name: Optiona
 
 
 if __name__ == "__main__":
-    mcp.run()
+    transport = os.environ.get("MCP_TRANSPORT", "stdio")
+    if transport in {"streamable-http", "streamable_http", "http"}:
+        _configure_http_transport()
+        mcp.settings.streamable_http_path = os.environ.get("MCP_PATH", "/mcp")
+        mcp.run(transport="streamable-http")
+    elif transport == "sse":
+        _configure_http_transport()
+        mcp.settings.mount_path = os.environ.get("MCP_PATH", "/sse")
+        mcp.run(transport="sse", mount_path=mcp.settings.mount_path)
+    else:
+        mcp.run()
