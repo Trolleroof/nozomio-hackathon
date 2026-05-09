@@ -11,6 +11,8 @@ from typing import Any, Sequence
 
 from .config import load_config
 from .crucible_store import CrucibleStore
+from .nia import is_configured as nia_is_configured
+from .nia import search_nia_context
 
 
 QWEN_7B_MODEL_ID = "Qwen/Qwen2.5-7B-Instruct"
@@ -225,8 +227,18 @@ def stop_deployment(store: CrucibleStore, deployment_id: str) -> dict[str, Any]:
     return store.update_deployment(deployment_id, {"status": "stopped", "logs": logs, "updated_at": now})
 
 
-def search_context(store: CrucibleStore, query: str) -> list[dict[str, Any]]:
+def search_context(
+    store: CrucibleStore | None,
+    query: str,
+    *,
+    request_json: Any | None = None,
+) -> list[dict[str, Any]]:
     del store
+    if nia_is_configured():
+        snippets = search_nia_context(query, request_json=request_json)
+        if snippets:
+            return snippets
+
     snippets = [
         {
             "title": "Modal vLLM deployment health",

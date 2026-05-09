@@ -160,6 +160,14 @@ select option {
     @apply bg-gradient-to-r from-ember via-accent to-forge bg-clip-text text-transparent;
   }
 
+  .crucible-pixel-wordmark {
+    font-family: var(--font-geist-pixel-square), var(--font-geist-mono), ui-monospace, monospace;
+    font-feature-settings: normal;
+    letter-spacing: 0.02em;
+    line-height: 1;
+    text-transform: lowercase;
+  }
+
   .crucible-divider {
     @apply h-px w-full bg-border;
   }

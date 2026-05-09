@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { BrandMark } from "@/components/brand-mark";
 import { SidebarNav } from "@/components/sidebar-nav";
 
 export function AppFrame({ children }: { children: React.ReactNode }) {
@@ -8,11 +9,8 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
       <div className="flex min-h-screen flex-col md:flex-row">
         <aside className="crucible-sidebar">
           <div className="px-5 py-5">
-            <Link href="/" className="block">
-              <div className="text-sm font-medium tracking-tight">
-                <span className="crucible-gradient-text">Crucible</span>{" "}
-                <span className="text-foreground/85">Compute</span>
-              </div>
+            <Link href="/" className="inline-flex items-center">
+              <BrandMark />
             </Link>
           </div>
           <SidebarNav />

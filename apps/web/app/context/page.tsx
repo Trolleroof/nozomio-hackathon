@@ -1,5 +1,6 @@
 import { AppFrame } from "@/components/app-frame";
 import { ContextPanel } from "@/components/context-panel";
+import { hasNiaApiKey } from "@/lib/nia-server";
 import { contextSnippets } from "@crucible/shared/fixtures";
 
 export default function ContextPage() {
@@ -8,7 +9,7 @@ export default function ContextPage() {
       <div className="mb-8">
         <h1 className="text-2xl font-medium tracking-tight">Context</h1>
       </div>
-      <ContextPanel snippets={contextSnippets} />
+      <ContextPanel niaConnected={hasNiaApiKey()} snippets={contextSnippets} />
     </AppFrame>
   );
 }

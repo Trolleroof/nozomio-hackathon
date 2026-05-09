@@ -39,6 +39,8 @@ CONFIG_DEFAULTS: dict[str, Any] = {
     "vultr_os_id": 2284,
     "vultr_ssh_key_ids": "",
     "vultr_firewall_group_id": "",
+    "nia_api_key": None,
+    "nia_api_base_url": "https://apigcp.trynia.ai/v2",
 }
 
 ENV_TO_CONFIG = {
@@ -76,6 +78,8 @@ ENV_TO_CONFIG = {
     "ANYGPU_VULTR_OS_ID": "vultr_os_id",
     "ANYGPU_VULTR_SSH_KEY_IDS": "vultr_ssh_key_ids",
     "ANYGPU_VULTR_FIREWALL_GROUP_ID": "vultr_firewall_group_id",
+    "NIA_API_KEY": "nia_api_key",
+    "NIA_API_BASE_URL": "nia_api_base_url",
 }
 
 
