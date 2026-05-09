@@ -4,7 +4,28 @@ import json
 import os
 from typing import Optional
 
-from mcp.server.fastmcp import FastMCP
+try:
+    from mcp.server.fastmcp import FastMCP
+except ModuleNotFoundError as error:
+    if not (error.name or "").startswith("mcp"):
+        raise
+
+    class FastMCP:  # type: ignore[no-redef]
+        def __init__(self, name: str):
+            self.name = name
+            self.tools = {}
+
+        def tool(self, *args, **_kwargs):
+            def decorator(func):
+                self.tools[func.__name__] = func
+                return func
+
+            if args and callable(args[0]):
+                return decorator(args[0])
+            return decorator
+
+        def run(self) -> None:
+            raise RuntimeError("The mcp package is required to run the MCP server.")
 
 from .models import DeployedInstance
 from .providers import fetch_lambda, fetch_runpod, fetch_vast, fetch_modal
