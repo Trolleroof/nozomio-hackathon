@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 from typing import Any, Callable
 
 from .crucible import (
@@ -112,6 +113,49 @@ TOOLS: list[JSON] = [
             "required": ["deploymentId", "error"],
         },
     },
+    {
+        "name": "crucible_create_tensorlake_sandbox",
+        "description": "Create a Tensorlake sandbox for isolated agent tool execution.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "image": {"type": "string"},
+                "cpus": {"type": "number"},
+                "memoryMb": {"type": "integer"},
+                "diskMb": {"type": "integer"},
+                "timeoutSecs": {"type": "integer"},
+                "name": {"type": "string"},
+            },
+        },
+    },
+    {
+        "name": "crucible_run_tensorlake_command",
+        "description": "Run a command inside an existing Tensorlake sandbox.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "sandboxId": {"type": "string"},
+                "name": {"type": "string"},
+                "command": {"type": "string"},
+                "args": {"type": "array", "items": {"type": "string"}},
+                "timeoutSecs": {"type": "number"},
+            },
+            "required": ["command"],
+        },
+    },
+    {
+        "name": "crucible_terminate_tensorlake_sandbox",
+        "description": "Terminate a Tensorlake sandbox by ID or name.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"sandboxId": {"type": "string"}, "name": {"type": "string"}},
+        },
+    },
+    {
+        "name": "crucible_list_tensorlake_sandboxes",
+        "description": "List Tensorlake sandboxes visible to the configured API key.",
+        "inputSchema": {"type": "object", "properties": {}},
+    },
 ]
 
 
@@ -190,6 +234,10 @@ def _explain_failure(store: Any, deployment_id: str, error: str) -> JSON:
     }
 
 
+def _tensorlake_adapter() -> Any:
+    return importlib.import_module("anygpu.tensorlake_sandbox")
+
+
 def handle_tool_call(store: Any, tool_name: str, arguments: JSON | None = None) -> JSON:
     arguments = arguments or {}
     try:
@@ -233,6 +281,39 @@ def handle_tool_call(store: Any, tool_name: str, arguments: JSON | None = None) 
                     _require(arguments, "error"),
                 )
             )
+        if tool_name == "crucible_create_tensorlake_sandbox":
+            adapter = _tensorlake_adapter()
+            create_args: dict[str, Any] = {}
+            for json_key, adapter_key in (
+                ("image", "image"),
+                ("cpus", "cpus"),
+                ("memoryMb", "memory_mb"),
+                ("diskMb", "disk_mb"),
+                ("timeoutSecs", "timeout_secs"),
+                ("name", "name"),
+            ):
+                if json_key in arguments:
+                    create_args[adapter_key] = arguments[json_key]
+            return _ok(adapter.create_sandbox(**create_args))
+        if tool_name == "crucible_run_tensorlake_command":
+            return _ok(
+                _tensorlake_adapter().run_command(
+                    sandbox_id=arguments.get("sandboxId"),
+                    name=arguments.get("name"),
+                    command=_require(arguments, "command"),
+                    args=arguments.get("args"),
+                    timeout=arguments.get("timeoutSecs"),
+                )
+            )
+        if tool_name == "crucible_terminate_tensorlake_sandbox":
+            return _ok(
+                _tensorlake_adapter().terminate_sandbox(
+                    sandbox_id=arguments.get("sandboxId"),
+                    name=arguments.get("name"),
+                )
+            )
+        if tool_name == "crucible_list_tensorlake_sandboxes":
+            return _ok(_tensorlake_adapter().list_sandboxes())
         return _error(f"Unknown Crucible MCP tool: {tool_name}")
     except ApprovalRequiredError as exc:
         return _error(str(exc))

@@ -1,4 +1,5 @@
 import asyncio
+import importlib
 import json
 import os
 from typing import Optional
@@ -14,6 +15,10 @@ mcp = FastMCP("gpu-cheapest")
 
 # In-memory state — single active deployment per server session
 _active: Optional[DeployedInstance] = None
+
+
+def _tensorlake_adapter():
+    return importlib.import_module("anygpu.tensorlake_sandbox")
 
 
 @mcp.tool()
@@ -158,6 +163,65 @@ async def teardown() -> str:
     _active = None
 
     return json.dumps({"status": "terminated", "final_spend": spend}, indent=2)
+
+
+@mcp.tool()
+def create_tensorlake_sandbox(
+    image: str = "tensorlake/ubuntu-minimal",
+    cpus: float = 1.0,
+    memory_mb: int = 1024,
+    disk_mb: int = 10240,
+    timeout_secs: int = 300,
+    name: Optional[str] = None,
+) -> str:
+    """Create a Tensorlake MicroVM sandbox for isolated agent tool execution."""
+    return json.dumps(
+        _tensorlake_adapter().create_sandbox(
+            image=image,
+            cpus=cpus,
+            memory_mb=memory_mb,
+            disk_mb=disk_mb,
+            timeout_secs=timeout_secs,
+            name=name,
+        ),
+        indent=2,
+    )
+
+
+@mcp.tool()
+def run_tensorlake_command(
+    command: str,
+    sandbox_id: Optional[str] = None,
+    name: Optional[str] = None,
+    args: Optional[list[str]] = None,
+    timeout: Optional[float] = None,
+) -> str:
+    """Run a command inside a Tensorlake sandbox by sandbox ID or name."""
+    return json.dumps(
+        _tensorlake_adapter().run_command(
+            sandbox_id=sandbox_id,
+            name=name,
+            command=command,
+            args=args,
+            timeout=timeout,
+        ),
+        indent=2,
+    )
+
+
+@mcp.tool()
+def list_tensorlake_sandboxes() -> str:
+    """List Tensorlake sandboxes visible to the configured API key."""
+    return json.dumps(_tensorlake_adapter().list_sandboxes(), indent=2)
+
+
+@mcp.tool()
+def terminate_tensorlake_sandbox(sandbox_id: Optional[str] = None, name: Optional[str] = None) -> str:
+    """Terminate a Tensorlake sandbox by sandbox ID or name."""
+    return json.dumps(
+        _tensorlake_adapter().terminate_sandbox(sandbox_id=sandbox_id, name=name),
+        indent=2,
+    )
 
 
 if __name__ == "__main__":

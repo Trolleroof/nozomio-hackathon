@@ -8,6 +8,12 @@ version = "0.1.0"
 description = "Local AnyGPU production-flow control-plane prototype"
 requires-python = ">=3.11"
 readme = "README.md"
+dependencies = [
+    "asyncssh>=2.14.0",
+    "httpx>=0.27.0",
+    "mcp[cli]>=1.0.0",
+    "tensorlake>=0.5.9",
+]
 
 [project.scripts]
 anygpu = "anygpu.cli:main"
