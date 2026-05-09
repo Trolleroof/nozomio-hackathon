@@ -2,6 +2,7 @@ import { ArrowRight, BookOpenText, Rocket, ServerCog } from "lucide-react";
 import Link from "next/link";
 
 import { AppFrame } from "@/components/app-frame";
+import { EndpointConsole } from "@/components/endpoint-console";
 import { StatusBadge } from "@/components/status-badge";
 import { contextSnippets, deployments, generatedPlan, providerCapabilities } from "@crucible/shared/fixtures";
 
@@ -24,31 +25,35 @@ export default function DashboardPage() {
         </Link>
       </div>
 
-      <div className="grid items-start gap-5 lg:grid-cols-[1fr_19rem]">
-        <section className="crucible-card">
-          <div className="flex items-center justify-between gap-4">
-            <h2 className="text-lg font-semibold tracking-tight">Active deployments</h2>
-            <span className="text-sm text-muted-foreground">{readyCount} healthy</span>
-          </div>
-          <div className="mt-4 divide-y divide-border">
-            {deployments.slice(0, 4).map((deployment) => (
-              <Link
-                key={deployment.id}
-                href={`/deployments/${deployment.id}`}
-                className="grid gap-2 py-3 text-sm transition-colors hover:text-accent sm:grid-cols-[1fr_7rem_9rem]"
-              >
-                <span>
-                  <span className="font-medium text-foreground">{deployment.name}</span>
-                  <span className="mt-1 block text-muted-foreground">{deployment.modelId}</span>
-                </span>
-                <span className="text-muted-foreground">{deployment.provider}</span>
-                <span className="sm:justify-self-end">
-                  <StatusBadge status={deployment.status} />
-                </span>
-              </Link>
-            ))}
-          </div>
-        </section>
+      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_19rem]">
+        <div className="space-y-5">
+          <section className="crucible-card">
+            <div className="flex items-center justify-between gap-4">
+              <h2 className="text-lg font-semibold tracking-tight">Active deployments</h2>
+              <span className="text-sm text-muted-foreground">{readyCount} healthy</span>
+            </div>
+            <div className="mt-4 divide-y divide-border">
+              {deployments.slice(0, 4).map((deployment) => (
+                <Link
+                  key={deployment.id}
+                  href={`/deployments/${deployment.id}`}
+                  className="grid gap-2 py-3 text-sm transition-colors hover:text-accent sm:grid-cols-[1fr_7rem_9rem]"
+                >
+                  <span>
+                    <span className="font-medium text-foreground">{deployment.name}</span>
+                    <span className="mt-1 block text-muted-foreground">{deployment.modelId}</span>
+                  </span>
+                  <span className="text-muted-foreground">{deployment.provider}</span>
+                  <span className="sm:justify-self-end">
+                    <StatusBadge status={deployment.status} />
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </section>
+
+          <EndpointConsole />
+        </div>
 
         <div className="space-y-5">
           <section className="crucible-card">

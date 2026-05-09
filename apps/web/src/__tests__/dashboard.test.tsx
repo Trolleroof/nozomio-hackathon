@@ -11,6 +11,9 @@ describe("DashboardPage", () => {
     expect(screen.getByRole("heading", { name: "Dashboard" })).toBeInTheDocument();
     expect(screen.getByText("Active deployments")).toBeInTheDocument();
     expect(screen.getByText("Provider status")).toBeInTheDocument();
+    expect(screen.getByText("Endpoint")).toBeInTheDocument();
+    expect(screen.getByText("Chat")).toBeInTheDocument();
+    expect(screen.getByText("base_url")).toBeInTheDocument();
     expect(screen.getByText("Quick deployment")).toBeInTheDocument();
   });
 });
