@@ -299,6 +299,13 @@ def list_provider_capabilities(store: CrucibleStore) -> list[dict[str, Any]]:
             credential_names=["COREWEAVE_API_KEY", "COREWEAVE_KUBECONFIG"],
             notes="Provider catalog entry only; no direct launch adapter is enabled here.",
         ),
+        _provider_record(
+            "Tensorlake",
+            configured=bool(os.environ.get("TENSORLAKE_API_KEY")),
+            supports_openai_endpoint=False,
+            credential_names=["TENSORLAKE_API_KEY"],
+            notes="Creates isolated MicroVM sandboxes for agent tool execution and command runs.",
+        ),
     ]
     for record in records:
         record["updated_at"] = now
