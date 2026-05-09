@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import os
 import stat
@@ -400,7 +402,11 @@ def test_benchmark_run_failed_measurement_records_failed_compatibility(tmp_path:
     model_path.parent.mkdir()
     model_path.write_bytes(b"GGUF test model")
     fake_bin = make_fake_docker(tmp_path, "NVIDIA GeForce RTX 4090, 24564, 550.54.14")
-    env = {"PATH": f"{fake_bin}:{os.environ['PATH']}"}
+    env = {
+        "PATH": f"{fake_bin}:{os.environ['PATH']}",
+        "ANYGPU_DOCKER_RUNTIME_PORT_START": "18100",
+        "ANYGPU_DOCKER_RUNTIME_PORT_END": "18120",
+    }
 
     run_cli(home, "login")
     run_cli(home, "org", "create", "acme-ai")
@@ -583,7 +589,11 @@ def test_deploy_ignores_failed_compatibility_records(tmp_path: Path) -> None:
     model_path.parent.mkdir()
     model_path.write_bytes(b"GGUF test model")
     fake_bin = make_fake_docker(tmp_path, "NVIDIA GeForce RTX 4090, 24564, 550.54.14")
-    env = {"PATH": f"{fake_bin}:{os.environ['PATH']}"}
+    env = {
+        "PATH": f"{fake_bin}:{os.environ['PATH']}",
+        "ANYGPU_DOCKER_RUNTIME_PORT_START": "18130",
+        "ANYGPU_DOCKER_RUNTIME_PORT_END": "18150",
+    }
 
     run_cli(home, "login")
     run_cli(home, "org", "create", "acme-ai")

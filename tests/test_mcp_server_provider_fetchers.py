@@ -1,12 +1,10 @@
 import json
-
-import pytest
+import asyncio
 
 from mcp_server.providers import vast_ai
 
 
-@pytest.mark.asyncio
-async def test_vast_fetch_follows_provider_redirects(monkeypatch) -> None:
+def test_vast_fetch_follows_provider_redirects(monkeypatch) -> None:
     captured: dict = {}
 
     class FakeResponse:
@@ -31,13 +29,12 @@ async def test_vast_fetch_follows_provider_redirects(monkeypatch) -> None:
     monkeypatch.setenv("VAST_API_KEY", "test-token")
     monkeypatch.setattr(vast_ai.httpx, "AsyncClient", FakeAsyncClient)
 
-    await vast_ai.fetch()
+    asyncio.run(vast_ai.fetch())
 
     assert captured["kwargs"]["follow_redirects"] is True
 
 
-@pytest.mark.asyncio
-async def test_vast_fetch_sends_json_query(monkeypatch) -> None:
+def test_vast_fetch_sends_json_query(monkeypatch) -> None:
     captured: dict = {}
 
     class FakeResponse:
@@ -61,7 +58,7 @@ async def test_vast_fetch_sends_json_query(monkeypatch) -> None:
     monkeypatch.setenv("VAST_API_KEY", "test-token")
     monkeypatch.setattr(vast_ai.httpx, "AsyncClient", FakeAsyncClient)
 
-    await vast_ai.fetch()
+    asyncio.run(vast_ai.fetch())
 
     query = json.loads(captured["kwargs"]["params"]["q"])
     assert query["gpu_ram"] == {"gte": 16384}

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import os
 import subprocess
@@ -51,6 +53,43 @@ def test_broker_refresh_seeds_provider_catalog_across_architectures(tmp_path: Pa
     assert broker["capacity_records"]
     assert broker["managed_pools"]
     assert broker["managed_pools"]["managed-h100-runpod-us-secure"]["provisioning_status"] == "not_configured"
+
+
+def test_broker_refresh_includes_expanded_gpu_broker_catalog(tmp_path: Path) -> None:
+    home = tmp_path / "anygpu"
+
+    run_cli(home, "broker", "refresh")
+    providers = run_cli(home, "providers", "list", "--architecture", "nvidia")
+    run_cli(home, "login")
+    run_cli(home, "org", "create", "acme-ai")
+    run_cli(home, "project", "create", "prod-chat")
+    run_cli(home, "compute", "use", "managed")
+    pools = run_cli(home, "compute", "pools", "list")
+
+    state = read_state(home)
+    broker = state["provider_broker"]
+    expected = {
+        "nebius": ("Nebius AI Cloud", ["b200", "h200", "h100"]),
+        "oci": ("Oracle Cloud Infrastructure GPU", ["b200", "h200", "h100", "l40s", "a100", "a10"]),
+        "paperspace": ("DigitalOcean Paperspace", ["h100", "a100"]),
+        "datacrunch": ("DataCrunch", ["b200", "h200", "h100", "a100", "l40s"]),
+        "hyperstack": ("Hyperstack", ["h200", "h100", "a100"]),
+        "cudo": ("Cudo Compute", ["h100", "a100", "l40s", "a40"]),
+        "genesis-cloud": ("Genesis Cloud", ["b200", "h200", "h100"]),
+        "voltage-park": ("Voltage Park", ["b200", "h100"]),
+    }
+    for provider_id, (name, accelerators) in expected.items():
+        assert broker["providers"][provider_id]["name"] == name
+        assert broker["providers"][provider_id]["accelerators"] == accelerators
+        assert provider_id in providers
+        assert name in providers
+
+    assert "managed-b200-nebius-us" in pools
+    assert "managed-h100-oci-us-ashburn-1" in pools
+    assert "managed-h100-voltage-park-texas" in pools
+    assert "managed-h200-genesis-cloud-fr" in broker["managed_pools"]
+    assert broker["managed_pools"]["managed-b200-datacrunch-eu"]["max_vram_gb"] == 192
+    assert state["cost_records"]["nebius:managed-b200-nebius-us"]["source"] == "broker_seed"
 
 
 def test_providers_list_can_filter_by_architecture(tmp_path: Path) -> None:

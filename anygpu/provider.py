@@ -477,7 +477,6 @@ class DockerProvider:
         return gpus
 
     @staticmethod
-    @staticmethod
     def _safe_name(value: str) -> str:
         return "".join(char if char.isalnum() or char in {"-", "_"} else "-" for char in value).strip("-") or "runtime"
 
