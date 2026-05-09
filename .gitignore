@@ -9,3 +9,20 @@ apps/*/test-results/
 apps/*/playwright-report/
 
 .DS_Store
+.env
+.env.*
+!.env.example
+
+.anygpu/
+.local-anygpu*/
+
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+.venv/
+venv/
+
+build/
+dist/
+*.egg-info/
