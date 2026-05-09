@@ -4,6 +4,7 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -83,6 +84,22 @@ def post_json_with_headers(url: str, payload: dict) -> tuple[dict, dict]:
         return json.loads(response.read().decode()), headers
 
 
+def post_json_error(url: str, payload: dict) -> tuple[int, dict, dict]:
+    request = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode(),
+        headers={"Content-Type": "application/json", "Authorization": "Bearer test"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=5) as response:
+            return response.status, json.loads(response.read().decode()), {
+                key.lower(): value for key, value in response.headers.items()
+            }
+    except urllib.error.HTTPError as error:
+        return error.code, json.loads(error.read().decode()), {key.lower(): value for key, value in error.headers.items()}
+
+
 def get_json(url: str) -> dict:
     with urllib.request.urlopen(url, timeout=5) as response:
         return json.loads(response.read().decode())
@@ -159,7 +176,7 @@ def test_gateway_refreshes_vast_and_vultr_route_health(monkeypatch) -> None:
     assert vultr_deployment["upstream_url"] == "http://203.0.113.10:8000/v1/chat/completions"
 
 
-def test_gateway_serves_openai_chat_and_records_usage(tmp_path: Path, monkeypatch) -> None:
+def test_gateway_lists_models_but_refuses_simulated_chat_routes(tmp_path: Path, monkeypatch) -> None:
     home = tmp_path / "anygpu"
     prepare_deployment(home)
     monkeypatch.setenv("ANYGPU_HOME", str(home))
@@ -175,27 +192,77 @@ def test_gateway_serves_openai_chat_and_records_usage(tmp_path: Path, monkeypatc
         models = get_json(f"http://127.0.0.1:{port}/v1/models")
         assert models["object"] == "list"
         assert {model["id"] for model in models["data"]} == {"support-chat-prod"}
+        assert models["data"][0]["anygpu"]["simulated"] is True
 
-        body = post_json(
+        status, body, headers = post_json_error(
             f"http://127.0.0.1:{port}/v1/chat/completions",
             {
                 "model": "support-chat-prod",
                 "messages": [{"role": "user", "content": "Hello"}],
             },
         )
-        assert body["object"] == "chat.completion"
-        assert body["model"] == "support-chat-prod"
-        assert body["choices"][0]["message"]["role"] == "assistant"
-        assert "support-chat-prod" in body["choices"][0]["message"]["content"]
-        assert body["usage"]["total_tokens"] > 0
+        assert status == 503
+        assert body["error"]["type"] == "runtime_not_available"
+        assert "simulated route" in body["error"]["message"]
+        assert headers["x-anygpu-simulated"] == "true"
     finally:
         server.shutdown()
         server.server_close()
 
     with (home / "state.json").open() as handle:
         state = json.load(handle)
-    assert state["usage_events"]
-    assert state["cost_events"]
+    assert not state["usage_events"]
+    assert not state["cost_events"]
+
+
+def test_gateway_refuses_fake_fixture_runtime(tmp_path: Path, monkeypatch) -> None:
+    home = tmp_path / "anygpu"
+    monkeypatch.setenv("ANYGPU_HOME", str(home))
+    state = initial_state()
+    state["deployments"]["fixture-chat"] = {
+        "name": "fixture-chat",
+        "provider": "local",
+        "health": "healthy",
+        "runtime_process": {
+            "command": [sys.executable, str(FAKE_LLAMA)],
+            "health": "healthy",
+        },
+        "routes": [
+            {
+                "route": "local:local",
+                "pool": "local",
+                "runtime": "llama.cpp",
+                "status": "healthy",
+                "simulated": False,
+                "runtime_url": "http://127.0.0.1:19999",
+                "upstream_url": "http://127.0.0.1:19999",
+                "p95_ms": 1,
+            }
+        ],
+    }
+    home.mkdir(parents=True)
+    (home / "state.json").write_text(json.dumps(state))
+
+    server = make_server("127.0.0.1", 0)
+    port = server.server_address[1]
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        models = get_json(f"http://127.0.0.1:{port}/v1/models")
+        assert models["data"][0]["anygpu"]["test_fixture"] is True
+        status, body, headers = post_json_error(
+            f"http://127.0.0.1:{port}/v1/chat/completions",
+            {
+                "model": "fixture-chat",
+                "messages": [{"role": "user", "content": "Hello"}],
+            },
+        )
+        assert status == 503
+        assert body["error"]["type"] == "test_fixture_runtime"
+        assert headers["x-anygpu-simulated"] == "false"
+    finally:
+        server.shutdown()
+        server.server_close()
 
 
 def test_gateway_proxies_real_local_llama_route_with_metadata_headers(tmp_path: Path, monkeypatch) -> None:
@@ -206,6 +273,7 @@ def test_gateway_proxies_real_local_llama_route_with_metadata_headers(tmp_path: 
     monkeypatch.setenv("ANYGPU_LLAMA_CPP_CLI_PATH", sys.executable)
     monkeypatch.setenv("ANYGPU_LLAMA_CPP_CLI_ARGS", f"{FAKE_LLAMA} --version")
     monkeypatch.setenv("ANYGPU_LLAMA_CPP_HEALTH_PATH", "/health")
+    monkeypatch.setenv("ANYGPU_ALLOW_TEST_FIXTURE_RUNTIME", "1")
     monkeypatch.setenv("ANYGPU_LOCAL_RUNTIME_PORT_START", "19300")
     monkeypatch.setenv("ANYGPU_LOCAL_RUNTIME_PORT_END", "19500")
     model_path = home / "tiny.gguf"

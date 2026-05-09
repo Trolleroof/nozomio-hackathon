@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
@@ -39,35 +40,6 @@ def _chat_text(payload: dict[str, Any]) -> str:
     return str(payload.get("prompt", ""))
 
 
-def _completion(deployment_name: str, payload: dict[str, Any]) -> tuple[dict[str, Any], int, int]:
-    prompt = _chat_text(payload)
-    prompt_tokens = _count_tokens(prompt)
-    content = (
-        f"AnyGPU local gateway routed {deployment_name} through a verified deployment route. "
-        f"Received: {prompt[:120] or 'empty prompt'}"
-    )
-    completion_tokens = _count_tokens(content)
-    body = {
-        "id": f"chatcmpl-local-{int(time.time() * 1000)}",
-        "object": "chat.completion",
-        "created": int(time.time()),
-        "model": deployment_name,
-        "choices": [
-            {
-                "index": 0,
-                "message": {"role": "assistant", "content": content},
-                "finish_reason": "stop",
-            }
-        ],
-        "usage": {
-            "prompt_tokens": prompt_tokens,
-            "completion_tokens": completion_tokens,
-            "total_tokens": prompt_tokens + completion_tokens,
-        },
-    }
-    return body, prompt_tokens, completion_tokens
-
-
 def _route_headers(deployment_name: str, route: dict[str, Any]) -> dict[str, str]:
     route_name = "local" if route.get("pool") == "local" else route["route"]
     return {
@@ -77,6 +49,18 @@ def _route_headers(deployment_name: str, route: dict[str, Any]) -> dict[str, str
         "x-anygpu-simulated": str(bool(route.get("simulated", True))).lower(),
         "x-anygpu-upstream": route.get("upstream_url") or route.get("runtime_url") or "",
     }
+
+
+def _is_test_fixture_runtime(deployment: dict[str, Any]) -> bool:
+    if os.environ.get("ANYGPU_ALLOW_TEST_FIXTURE_RUNTIME"):
+        return False
+    process = deployment.get("runtime_process", {})
+    command = process.get("command", [])
+    if isinstance(command, str):
+        command_text = command
+    else:
+        command_text = " ".join(str(part) for part in command)
+    return "tests/fixtures/fake_llama_server.py" in command_text
 
 
 def _proxy_to_runtime(
@@ -147,12 +131,22 @@ def _model_list(state: dict[str, Any]) -> dict[str, Any]:
     for deployment in state.get("deployments", {}).values():
         if deployment.get("health") == "stopped":
             continue
+        route = next(iter(deployment.get("routes", [])), {})
         data.append(
             {
                 "id": deployment["name"],
                 "object": "model",
                 "created": int(time.time()),
                 "owned_by": "anygpu",
+                "anygpu": {
+                    "health": deployment.get("health", "unknown"),
+                    "provider": deployment.get("provider") or route.get("pool"),
+                    "runtime": deployment.get("runtime") or route.get("runtime"),
+                    "route": route.get("route"),
+                    "simulated": bool(route.get("simulated", True)),
+                    "test_fixture": _is_test_fixture_runtime(deployment),
+                    "upstream_url": route.get("runtime_url") or route.get("upstream_url"),
+                },
             }
         )
     return {"object": "list", "data": sorted(data, key=lambda item: item["id"])}
@@ -202,6 +196,23 @@ class AnyGPUGatewayHandler(BaseHTTPRequestHandler):
                 return
             route = healthy_routes[0]
             metadata_headers = _route_headers(deployment_name, route)
+            if _is_test_fixture_runtime(deployment):
+                _json_response(
+                    self,
+                    503,
+                    {
+                        "error": {
+                            "type": "test_fixture_runtime",
+                            "message": (
+                                f"Deployment {deployment_name} is backed by the fake llama.cpp test fixture, "
+                                "not a real model runtime. Configure llama_cpp_server_path to a real llama-server "
+                                "binary or deploy through Docker, Vast, or Vultr."
+                            ),
+                        }
+                    },
+                    metadata_headers,
+                )
+                return
             if not route.get("simulated", True) and route.get("runtime_url"):
                 status, body, upstream_headers = _proxy_to_runtime(route["runtime_url"], self.path, payload)
                 usage = body.get("usage", {})
@@ -212,13 +223,22 @@ class AnyGPUGatewayHandler(BaseHTTPRequestHandler):
                 headers = {**upstream_headers, **metadata_headers}
                 _json_response(self, status, body, headers)
                 return
-            body, prompt_tokens, completion_tokens = _completion(deployment_name, payload)
-            latency_ms = max(1, int((time.perf_counter() - start) * 1000) + route["p95_ms"])
-            record_usage(state, deployment_name, prompt_tokens, completion_tokens, latency_ms)
-        if payload.get("stream"):
-            self._stream_response(body, metadata_headers)
+            reason = "simulated route" if route.get("simulated", True) else "missing runtime_url"
+            _json_response(
+                self,
+                503,
+                {
+                    "error": {
+                        "type": "runtime_not_available",
+                        "message": (
+                            f"Deployment {deployment_name} is not backed by a real runtime "
+                            f"({reason}). Start a real Docker, Vast, Vultr, or local llama.cpp/vLLM runtime."
+                        ),
+                    }
+                },
+                metadata_headers,
+            )
             return
-        _json_response(self, 200, body, metadata_headers)
 
     def _stream_response(self, body: dict[str, Any], headers: dict[str, str]) -> None:
         content = body["choices"][0]["message"]["content"]

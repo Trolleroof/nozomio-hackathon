@@ -7,6 +7,15 @@ type GatewayModel = {
   id: string;
   object?: string;
   owned_by?: string;
+  anygpu?: {
+    health?: string;
+    provider?: string;
+    runtime?: string;
+    route?: string;
+    simulated?: boolean;
+    test_fixture?: boolean;
+    upstream_url?: string;
+  };
 };
 
 type GatewayStatus = {
@@ -76,6 +85,15 @@ export function EndpointConsole() {
     return gateway.ok ? "online" : "offline";
   }, [gateway.ok, loadingStatus]);
 
+  const selectedModel = gateway.models.find((item) => item.id === model);
+  const routeMode = selectedModel?.anygpu?.test_fixture
+    ? "test fixture"
+    : selectedModel?.anygpu?.simulated
+      ? "simulated"
+      : selectedModel
+        ? "real runtime"
+        : "unknown";
+
   async function sendMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmed = prompt.trim();
@@ -101,7 +119,9 @@ export function EndpointConsole() {
       });
       const data = await response.json();
       if (!response.ok) {
-        throw new Error(data?.error ?? `Gateway returned ${response.status}`);
+        const error = data?.error;
+        const message = typeof error === "string" ? error : error?.message;
+        throw new Error(message ?? `Gateway returned ${response.status}`);
       }
       const content = data?.choices?.[0]?.message?.content ?? "No response content returned.";
       setMessages([...nextMessages, { role: "assistant", content }]);
@@ -156,6 +176,14 @@ export function EndpointConsole() {
                 )}
               </select>
             </div>
+            <div className="crucible-card-compact">
+              <div className="text-xs text-muted-foreground">Route mode</div>
+              <div className="mt-1 text-sm font-medium">{routeMode}</div>
+            </div>
+            <div className="crucible-card-compact">
+              <div className="text-xs text-muted-foreground">Runtime</div>
+              <div className="mt-1 text-sm font-medium">{selectedModel?.anygpu?.runtime ?? "unknown"}</div>
+            </div>
           </div>
 
           <dl className="mt-4 space-y-3 text-sm">
@@ -171,6 +199,12 @@ export function EndpointConsole() {
               <dt className="text-muted-foreground">Chat route</dt>
               <dd className="crucible-code mt-1 break-all px-3 py-2">{`${gateway.baseUrl}/chat/completions`}</dd>
             </div>
+            {selectedModel?.anygpu?.upstream_url ? (
+              <div>
+                <dt className="text-muted-foreground">Upstream runtime</dt>
+                <dd className="crucible-code mt-1 break-all px-3 py-2">{selectedModel.anygpu.upstream_url}</dd>
+              </div>
+            ) : null}
           </dl>
 
           {gateway.error ? (
