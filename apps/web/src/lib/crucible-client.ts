@@ -8,9 +8,10 @@ import type {
 } from "@crucible/shared/crucible-contract";
 
 export interface GenerateDeploymentPlanInput {
-  prompt: string;
+  prompt?: string;
   modelId: string;
   objective: DeploymentObjective;
+  notes?: string;
   stopPolicy?: string;
 }
 

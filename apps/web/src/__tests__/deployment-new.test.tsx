@@ -5,6 +5,60 @@ import { vi } from "vitest";
 import NewDeploymentPage from "../../app/deployments/new/page";
 
 describe("NewDeploymentPage", () => {
+  it("starts from model selection, three objectives, and optional intent notes", () => {
+    render(<NewDeploymentPage />);
+
+    expect(screen.queryByLabelText("Deployment request")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Model")).toHaveValue("Qwen/Qwen2.5-7B-Instruct");
+    expect(screen.getByLabelText("Hugging Face link or model ID")).toHaveValue("");
+    expect(screen.getByLabelText("Optional notes")).toHaveValue("");
+    expect(screen.getAllByRole("radio", { name: /Cheapest|Most reliable|Lowest latency/ })).toHaveLength(3);
+    expect(screen.queryByRole("radio", { name: "Balanced" })).not.toBeInTheDocument();
+  });
+
+  it("submits the picked model, selected objective, and optional notes as LLM intent", async () => {
+    vi.spyOn(global, "fetch").mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        id: "plan_custom",
+        prompt: "Deploy NousResearch/Hermes-3-Llama-3.1-8B with reliable objective. Notes: keep one fallback warm",
+        modelId: "NousResearch/Hermes-3-Llama-3.1-8B",
+        objective: "reliable",
+        recommendation: {
+          provider: "SkyPilot",
+          accelerator: "NVIDIA L4",
+          estimatedHourlyUsd: 0.8,
+          reason: "Reliability wins, with approval gated before launch.",
+          uncertainty: "Provider capacity may change."
+        },
+        approvalRequired: true,
+        approvalReason: "Approval required before launching paid GPU resources from a personal agent.",
+        status: "generated",
+        createdAt: "2026-05-09T22:00:00.000Z"
+      })
+    } as Response);
+
+    render(<NewDeploymentPage />);
+    fireEvent.change(screen.getByLabelText("Hugging Face link or model ID"), {
+      target: { value: "https://huggingface.co/NousResearch/Hermes-3-Llama-3.1-8B" }
+    });
+    fireEvent.click(screen.getByRole("radio", { name: "Most reliable" }));
+    fireEvent.change(screen.getByLabelText("Optional notes"), {
+      target: { value: "keep one fallback warm" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Generate plan" }));
+
+    await screen.findByText("SkyPilot");
+    expect(global.fetch).toHaveBeenCalledWith("/api/crucible/plan", expect.objectContaining({
+      body: JSON.stringify({
+        modelId: "NousResearch/Hermes-3-Llama-3.1-8B",
+        objective: "reliable",
+        notes: "keep one fallback warm"
+      })
+    }));
+    vi.restoreAllMocks();
+  });
+
   it("creates a safe approval-required plan for Qwen 7B", async () => {
     vi.spyOn(global, "fetch").mockResolvedValueOnce({
       ok: true,
@@ -28,10 +82,6 @@ describe("NewDeploymentPage", () => {
     } as Response);
 
     render(<NewDeploymentPage />);
-    const prompt = screen.getByLabelText("Deployment request");
-    fireEvent.change(prompt, {
-      target: { value: "Deploy Qwen 7B cheaply. Avoid multi-GPU unless required." }
-    });
     fireEvent.click(screen.getByRole("button", { name: "Generate plan" }));
     expect(await screen.findByText("Approval required")).toBeInTheDocument();
     expect(screen.getByText("Vast.ai")).toBeInTheDocument();

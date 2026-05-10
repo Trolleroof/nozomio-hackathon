@@ -13,11 +13,19 @@ export async function POST(request: Request) {
     const body = await request.json();
     const identity = deploymentMemoryIdentity(request);
     const memory = listDeploymentMemory(identity.userId, identity.sessionId);
+    const modelId = modelIdFromInput(body?.modelId);
+    const objective = objectiveFromInput(body?.objective);
+    const prompt = promptFromInput({
+      prompt: body?.prompt,
+      modelId,
+      objective,
+      notes: body?.notes
+    });
     const plan = await createBackendDeploymentPlan({
       userId: identity.userId,
-      prompt: body?.prompt,
-      modelId: body?.modelId,
-      objective: body?.objective,
+      prompt,
+      modelId,
+      objective,
       sourceAgent: "web"
     });
     const memoryInsights = deploymentMemoryInsights(memory);
@@ -42,4 +50,57 @@ export async function POST(request: Request) {
       { status: 400 }
     );
   }
+}
+
+function promptFromInput(input: {
+  prompt: unknown;
+  modelId: string;
+  objective?: string;
+  notes: unknown;
+}) {
+  const existingPrompt = text(input.prompt);
+  if (existingPrompt) {
+    return existingPrompt;
+  }
+  const notes = text(input.notes);
+  const objectiveLabel = input.objective ? objectiveLabels[input.objective] : "cheapest viable GPU";
+  return notes
+    ? `Deploy ${input.modelId} with ${objectiveLabel} objective. Notes: ${notes}`
+    : `Deploy ${input.modelId} with ${objectiveLabel} objective.`;
+}
+
+function modelIdFromInput(value: unknown) {
+  const raw = text(value);
+  if (!raw) {
+    return "Qwen/Qwen2.5-7B-Instruct";
+  }
+  try {
+    const url = new URL(raw);
+    if (url.hostname === "huggingface.co" || url.hostname.endsWith(".huggingface.co")) {
+      const [owner, model] = url.pathname.split("/").filter(Boolean);
+      if (owner && model) {
+        return `${owner}/${model}`;
+      }
+    }
+  } catch {
+    // Plain Hugging Face model IDs are already valid input.
+  }
+  return raw.replace(/^huggingface\.co\//, "").replace(/^https?:\/\/huggingface\.co\//, "");
+}
+
+function objectiveFromInput(value: unknown) {
+  const raw = text(value);
+  return raw === "cheapest" || raw === "reliable" || raw === "low_latency"
+    ? raw
+    : undefined;
+}
+
+const objectiveLabels: Record<string, string> = {
+  cheapest: "cheapest viable GPU",
+  reliable: "most reliable",
+  low_latency: "lowest latency"
+};
+
+function text(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
 }
