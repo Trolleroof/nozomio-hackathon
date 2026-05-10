@@ -4,8 +4,12 @@ describe("Crucible deploy route", () => {
   it("creates a deployment from a generated plan when a live gateway is configured", async () => {
     vi.resetModules();
     vi.stubEnv("CRUCIBLE_DEPLOYMENT_STORE_PATH", `/tmp/crucible-deployments-${Date.now()}-${Math.random()}.json`);
-    vi.stubEnv("INSFORGE_API_BASE_URL", "https://demo.insforge.app");
-    vi.stubEnv("ANYGPU_GATEWAY_BASE_URL", "");
+    vi.stubEnv("INSFORGE_API_BASE_URL", "");
+    vi.stubEnv("ANYGPU_GATEWAY_BASE_URL", "https://gateway.example/v1");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200
+    }));
 
     const { POST } = await import("../../app/api/crucible/deploy/route");
     const response = await POST(new Request("http://localhost/api/crucible/deploy", {
@@ -36,10 +40,11 @@ describe("Crucible deploy route", () => {
     expect(response.status).toBe(200);
     expect(body.deployment.id).toMatch(/^dep_/);
     expect(body.deployment.status).toBe("ready");
-    expect(body.deployment.endpointUrl).toBe("/api/gateway");
+    expect(body.deployment.endpointUrl).toBe("https://gateway.example/v1");
     expect(body.deployment.provider).toBe("Vast.ai");
     expect(response.headers.getSetCookie().join("\n")).toContain("crucible_deployment_ids=");
     expect(response.headers.getSetCookie().join("\n")).toContain(`crucible_deployment_${body.deployment.id}=`);
+    vi.unstubAllGlobals();
     vi.unstubAllEnvs();
   });
 });

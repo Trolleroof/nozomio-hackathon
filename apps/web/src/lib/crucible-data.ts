@@ -171,6 +171,7 @@ export function listApiTokens(): ApiToken[] {
 async function fetchGatewayModels(): Promise<GatewayModel[]> {
   try {
     const response = await fetch(`${gatewayBaseUrl()}/models`, {
+      headers: gatewayHeaders(),
       cache: "no-store",
       signal: AbortSignal.timeout(2500)
     });
@@ -281,6 +282,11 @@ function healthStatusFromDeploymentStatus(status: DeploymentStatus): HealthStatu
 
 function gatewayBaseUrl() {
   return (process.env.ANYGPU_GATEWAY_BASE_URL || defaultGatewayBaseUrl).replace(/\/$/, "");
+}
+
+function gatewayHeaders() {
+  const apiKey = process.env.ANYGPU_GATEWAY_API_KEY?.trim();
+  return apiKey ? { Authorization: `Bearer ${apiKey}` } : undefined;
 }
 
 function hasAnyEnv(names: string[]) {

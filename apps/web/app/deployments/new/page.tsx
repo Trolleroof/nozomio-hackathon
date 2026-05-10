@@ -23,9 +23,10 @@ const objectives: { value: DeploymentObjective; label: string }[] = [
 
 export default function NewDeploymentPage() {
   const router = useRouter();
-  const [modelId, setModelId] = useState(modelOptions[0].value);
-  const [customModel, setCustomModel] = useState("");
-  const [objective, setObjective] = useState<DeploymentObjective>("cheapest");
+  const [initialParams] = useState(readInitialDeploymentParams);
+  const [modelId, setModelId] = useState(initialParams.modelOption ?? modelOptions[0].value);
+  const [customModel, setCustomModel] = useState(initialParams.customModel ?? "");
+  const [objective, setObjective] = useState<DeploymentObjective>(initialParams.objective ?? "cheapest");
   const [notes, setNotes] = useState("");
   const [plan, setPlan] = useState<DeploymentPlan | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -259,4 +260,23 @@ function normalizeHuggingFaceModel(value: string) {
     // Keep plain model IDs as entered.
   }
   return raw.replace(/^huggingface\.co\//, "").replace(/^https?:\/\/huggingface\.co\//, "");
+}
+
+function readInitialDeploymentParams() {
+  if (typeof window === "undefined") {
+    return {};
+  }
+  const params = new URLSearchParams(window.location.search);
+  const requestedModel = normalizeHuggingFaceModel(params.get("modelId") ?? "");
+  const knownModel = modelOptions.find((model) => model.value === requestedModel)?.value;
+  const requestedObjective = params.get("objective");
+  const objective = objectives.some((item) => item.value === requestedObjective)
+    ? (requestedObjective as DeploymentObjective)
+    : undefined;
+
+  return {
+    modelOption: knownModel,
+    customModel: requestedModel && !knownModel ? requestedModel : undefined,
+    objective
+  };
 }

@@ -4,6 +4,22 @@ import { describe, expect, it, vi } from "vitest";
 
 import { EndpointConsole } from "../components/endpoint-console";
 
+const readyDeployment = {
+  id: "dep_ready",
+  planId: "plan_ready",
+  name: "Ready model",
+  modelId: "ready/model",
+  provider: "RunPod",
+  accelerator: "NVIDIA A5000",
+  status: "ready" as const,
+  endpointUrl: "/api/gateway",
+  createdAt: "2026-05-09T23:00:00.000Z",
+  updatedAt: "2026-05-09T23:00:00.000Z",
+  logs: [],
+  healthChecks: [],
+  context: []
+};
+
 describe("EndpointConsole", () => {
   it("defaults chat to the newest ready deployment and lets operators switch live deployments", async () => {
     render(<EndpointConsole deployments={[
@@ -68,7 +84,7 @@ describe("EndpointConsole", () => {
       })
     );
 
-    render(<EndpointConsole />);
+    render(<EndpointConsole deployments={[readyDeployment]} />);
     fireEvent.change(screen.getByPlaceholderText("Message the endpoint"), {
       target: { value: "Ping the runtime" }
     });
@@ -87,5 +103,14 @@ describe("EndpointConsole", () => {
 
     expect(await screen.findByText("Runtime is ready.")).toBeInTheDocument();
     vi.restoreAllMocks();
+  });
+
+  it("does not expose a chat endpoint when there are no live deployments", () => {
+    render(<EndpointConsole />);
+
+    expect(screen.getAllByText("No live deployment").length).toBeGreaterThan(0);
+    expect(screen.getByText("No live deployment is available to chat with.")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("Message the endpoint")).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
   });
 });

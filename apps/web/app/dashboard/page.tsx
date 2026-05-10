@@ -3,7 +3,6 @@ import Link from "next/link";
 
 import { AppFrame } from "@/components/app-frame";
 import { EndpointConsole } from "@/components/endpoint-console";
-import { OnboardingLiveDeployment } from "@/components/onboarding-live-deployment";
 import { StatusBadge } from "@/components/status-badge";
 import { listContextSnippets, listDeployments, listProviderCapabilities } from "@/lib/crucible-data";
 
@@ -30,8 +29,6 @@ export default async function DashboardPage() {
           New deployment
         </Link>
       </div>
-
-      <OnboardingLiveDeployment />
 
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_19rem]">
         <div className="space-y-5">

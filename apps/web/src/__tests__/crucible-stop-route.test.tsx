@@ -23,9 +23,13 @@ const plan: DeploymentPlan = {
 describe("Crucible stop route", () => {
   it("stops a stored deployment by id", async () => {
     vi.resetModules();
-    vi.stubEnv("ANYGPU_GATEWAY_BASE_URL", "");
+    vi.stubEnv("ANYGPU_GATEWAY_BASE_URL", "https://gateway.example/v1");
     vi.stubEnv("INSFORGE_API_BASE_URL", "");
     vi.stubEnv("CRUCIBLE_DEPLOYMENT_STORE_PATH", `/tmp/crucible-deployments-${Date.now()}-${Math.random()}.json`);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200
+    }));
 
     const { deployPlan } = await import("../lib/crucible-deployments");
     const { POST } = await import("../../app/api/crucible/deployments/[id]/stop/route");
@@ -40,6 +44,7 @@ describe("Crucible stop route", () => {
 
     expect(response.status).toBe(200);
     expect(body.deployment.status).toBe("stopped");
+    vi.unstubAllGlobals();
     vi.unstubAllEnvs();
   });
 });
