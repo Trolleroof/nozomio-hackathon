@@ -3,13 +3,12 @@ import { cookies } from "next/headers";
 
 import { sessionCookieName } from "@/lib/server-auth";
 
-const gatewayBaseUrl = process.env.ANYGPU_GATEWAY_BASE_URL ?? "http://127.0.0.1:8765/v1";
-
 export async function POST(request: Request) {
   try {
     const payload = await request.json();
     const insforgeBaseUrl = process.env.INSFORGE_API_BASE_URL?.replace(/\/$/, "");
-    if (insforgeBaseUrl && !process.env.ANYGPU_GATEWAY_BASE_URL) {
+    const gatewayBaseUrl = process.env.ANYGPU_GATEWAY_BASE_URL?.trim().replace(/\/$/, "");
+    if (insforgeBaseUrl && !gatewayBaseUrl) {
       const sessionToken = (await cookies()).get(sessionCookieName)?.value;
       if (!sessionToken) {
         return NextResponse.json(
@@ -36,6 +35,10 @@ export async function POST(request: Request) {
       return NextResponse.json(normalizeInsForgeChatResponse(body), { status: response.status });
     }
 
+    if (!gatewayBaseUrl) {
+      return NextResponse.json(createDemoChatResponse(payload));
+    }
+
     const response = await fetch(`${gatewayBaseUrl}/chat/completions`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -53,6 +56,57 @@ export async function POST(request: Request) {
       { status: 502 }
     );
   }
+}
+
+function createDemoChatResponse(payload: unknown) {
+  const record = payload && typeof payload === "object" && !Array.isArray(payload)
+    ? payload as Record<string, unknown>
+    : {};
+  const model = typeof record.model === "string" && record.model.trim()
+    ? record.model.trim()
+    : "Qwen/Qwen2.5-7B-Instruct";
+  const prompt = lastUserMessage(record.messages);
+  const content = [
+    `${model} is ready on the built-in Crucible demo gateway.`,
+    prompt ? `I received: "${prompt}"` : "Send prompts here to validate the OpenAI-compatible chat path.",
+    "Configure ANYGPU_GATEWAY_BASE_URL or INSFORGE_API_BASE_URL when you want this route to call a live runtime."
+  ].join(" ");
+
+  return {
+    id: `chatcmpl_demo_${Date.now()}`,
+    object: "chat.completion",
+    created: Math.floor(Date.now() / 1000),
+    model,
+    choices: [
+      {
+        index: 0,
+        message: {
+          role: "assistant",
+          content
+        },
+        finish_reason: "stop"
+      }
+    ],
+    anygpu: {
+      provider: "Crucible demo",
+      runtime: "built-in",
+      simulated: true
+    }
+  };
+}
+
+function lastUserMessage(messages: unknown) {
+  if (!Array.isArray(messages)) {
+    return "";
+  }
+  const userMessages = messages.filter((message): message is Record<string, unknown> => (
+    Boolean(message) &&
+    typeof message === "object" &&
+    !Array.isArray(message) &&
+    (message as Record<string, unknown>).role === "user"
+  ));
+  const last = userMessages.at(-1);
+  return typeof last?.content === "string" ? last.content.trim() : "";
 }
 
 function normalizeInsForgeModel(model: unknown) {

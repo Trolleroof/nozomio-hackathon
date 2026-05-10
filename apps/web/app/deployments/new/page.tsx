@@ -1,12 +1,13 @@
 "use client";
 
 import type { DeploymentObjective, DeploymentPlan } from "@crucible/shared/crucible-contract";
-import { CircleCheck, Cpu, ShieldCheck, TriangleAlert } from "lucide-react";
+import { Cpu, Rocket } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { AppFrame } from "@/components/app-frame";
 import { StatusBadge } from "@/components/status-badge";
-import { generateDeploymentPlan } from "@/lib/crucible-client";
+import { deployDeploymentPlan, generateDeploymentPlan } from "@/lib/crucible-client";
 import { formatCurrency } from "@/lib/format";
 
 const modelOptions = [
@@ -21,13 +22,14 @@ const objectives: { value: DeploymentObjective; label: string }[] = [
 ];
 
 export default function NewDeploymentPage() {
+  const router = useRouter();
   const [modelId, setModelId] = useState(modelOptions[0].value);
   const [customModel, setCustomModel] = useState("");
   const [objective, setObjective] = useState<DeploymentObjective>("cheapest");
   const [notes, setNotes] = useState("");
   const [plan, setPlan] = useState<DeploymentPlan | null>(null);
-  const [memoryStatus, setMemoryStatus] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isDeploying, setIsDeploying] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const resolvedModelId = normalizeHuggingFaceModel(customModel) || modelId;
@@ -42,7 +44,6 @@ export default function NewDeploymentPage() {
         notes: notes.trim()
       });
       setPlan(nextPlan);
-      setMemoryStatus(null);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Plan generation failed.");
     } finally {
@@ -50,29 +51,19 @@ export default function NewDeploymentPage() {
     }
   }
 
-  async function handleRemember(outcome: "ready" | "failed") {
+  async function handleDeploy() {
     if (!plan) {
       return;
     }
-    setMemoryStatus("Saving memory...");
-    const lesson = outcome === "failed"
-      ? `${plan.recommendation.provider} ${plan.recommendation.accelerator} failed or was rejected for ${plan.modelId}; avoid repeating without a new health signal.`
-      : `${plan.recommendation.provider} ${plan.recommendation.accelerator} worked for ${plan.modelId}; prefer it when the objective matches.`;
-    const response = await fetch("/api/crucible/memory", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ plan, outcome, lesson })
-    });
-    const body = await response.json();
-    if (!response.ok) {
-      setMemoryStatus(body.error || "Memory update failed.");
-      return;
+    setIsDeploying(true);
+    setError(null);
+    try {
+      const deployment = await deployDeploymentPlan(plan);
+      router.push(`/deployments/${deployment.id}`);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Deployment failed.");
+      setIsDeploying(false);
     }
-    setPlan({
-      ...plan,
-      memoryInsights: Array.isArray(body.memoryInsights) ? body.memoryInsights : plan.memoryInsights
-    });
-    setMemoryStatus("Saved to session memory.");
   }
 
   return (
@@ -231,31 +222,14 @@ export default function NewDeploymentPage() {
                 </div>
               ) : null}
               <button
-                className="crucible-secondary min-h-10 gap-2"
+                className="crucible-primary min-h-11 gap-2 px-5"
                 type="button"
+                onClick={handleDeploy}
+                disabled={isDeploying}
               >
-                <ShieldCheck aria-hidden="true" className="h-4 w-4" />
-                Request approval
+                <Rocket aria-hidden="true" className={`h-4 w-4 ${isDeploying ? "animate-pulse" : ""}`} />
+                {isDeploying ? "Deploying" : "Deploy"}
               </button>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  className="crucible-secondary min-h-10 gap-2"
-                  type="button"
-                  onClick={() => handleRemember("ready")}
-                >
-                  <CircleCheck aria-hidden="true" className="h-4 w-4" />
-                  Remember success
-                </button>
-                <button
-                  className="crucible-secondary min-h-10 gap-2"
-                  type="button"
-                  onClick={() => handleRemember("failed")}
-                >
-                  <TriangleAlert aria-hidden="true" className="h-4 w-4" />
-                  Remember failure
-                </button>
-              </div>
-              {memoryStatus ? <p className="text-sm text-muted-foreground">{memoryStatus}</p> : null}
             </div>
           ) : (
             <div className="mt-4 max-w-md text-sm leading-6 text-muted-foreground">
