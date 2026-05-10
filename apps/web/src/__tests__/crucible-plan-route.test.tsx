@@ -1,4 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 describe("Crucible plan route memory", () => {
   it("uses only the current user's session memory when generating a plan", async () => {
@@ -125,6 +128,40 @@ describe("Crucible plan route memory", () => {
     expect(body.modelId).toBe("Qwen/Qwen2.5-7B-Instruct");
     expect(body.prompt).toContain("Avoid multi-GPU unless required.");
     expect(body.backend.source).toBe("crucible");
+    vi.unstubAllEnvs();
+  });
+
+  it("generates a web plan without Python when the deployed runtime has no backend package", async () => {
+    vi.resetModules();
+    vi.stubEnv("CRUCIBLE_AUTH_STORE_PATH", `/tmp/crucible-auth-${Date.now()}-${Math.random()}.json`);
+    vi.stubEnv("CRUCIBLE_MEMORY_STORE_PATH", `/tmp/crucible-memory-${Date.now()}-${Math.random()}.json`);
+    vi.stubEnv("CRUCIBLE_BACKEND_CWD", mkdtempSync(join(tmpdir(), "crucible-no-python-")));
+    vi.stubEnv("NIA_API_KEY", "");
+    vi.stubEnv("PATH", "");
+
+    const { signup } = await import("../lib/server-auth");
+    const { POST } = await import("../../app/api/crucible/plan/route");
+    const current = await signup("web-no-python@example.com", "correct horse battery staple");
+
+    const response = await POST(new Request("http://localhost/api/crucible/plan", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: `crucible_session=${current.session.token}`
+      },
+      body: JSON.stringify({
+        modelId: "Qwen/Qwen2.5-7B-Instruct",
+        objective: "cheapest",
+        notes: "Use the provider keys available in production."
+      })
+    }));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.error).toBeUndefined();
+    expect(body.modelId).toBe("Qwen/Qwen2.5-7B-Instruct");
+    expect(body.backend.raw.source).toBe("typescript-web");
+    expect(JSON.stringify(body)).not.toContain("ENOENT");
     vi.unstubAllEnvs();
   });
 });

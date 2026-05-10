@@ -5,6 +5,61 @@ import { describe, expect, it, vi } from "vitest";
 import { EndpointConsole } from "../components/endpoint-console";
 
 describe("EndpointConsole", () => {
+  it("defaults chat to the newest ready deployment and lets operators switch live deployments", async () => {
+    render(<EndpointConsole deployments={[
+      {
+        id: "dep_old",
+        planId: "plan_old",
+        name: "Older model",
+        modelId: "older/model",
+        provider: "Vast.ai",
+        accelerator: "NVIDIA L4",
+        status: "ready",
+        endpointUrl: "/api/gateway",
+        createdAt: "2026-05-09T20:00:00.000Z",
+        updatedAt: "2026-05-09T20:00:00.000Z",
+        logs: [],
+        healthChecks: [],
+        context: []
+      },
+      {
+        id: "dep_new",
+        planId: "plan_new",
+        name: "Newest model",
+        modelId: "newest/model",
+        provider: "Vultr",
+        accelerator: "NVIDIA A16",
+        status: "ready",
+        endpointUrl: "/api/gateway",
+        createdAt: "2026-05-09T22:00:00.000Z",
+        updatedAt: "2026-05-09T22:00:00.000Z",
+        logs: [],
+        healthChecks: [],
+        context: []
+      },
+      {
+        id: "dep_failed",
+        planId: "plan_failed",
+        name: "Failed model",
+        modelId: "failed/model",
+        provider: "Modal",
+        accelerator: "NVIDIA L4",
+        status: "failed",
+        createdAt: "2026-05-09T23:00:00.000Z",
+        updatedAt: "2026-05-09T23:00:00.000Z",
+        logs: [],
+        healthChecks: [],
+        context: []
+      }
+    ]} />);
+
+    expect(screen.getByLabelText("Live deployment")).toHaveValue("dep_new");
+    expect(screen.getByRole("link", { name: "Open deployment" })).toHaveAttribute("href", "/deployments/dep_new");
+    fireEvent.change(screen.getByLabelText("Live deployment"), { target: { value: "dep_old" } });
+    expect(screen.getByRole("link", { name: "Open deployment" })).toHaveAttribute("href", "/deployments/dep_old");
+    expect(screen.queryByRole("option", { name: /Failed model/ })).not.toBeInTheDocument();
+  });
+
   it("shows an animated assistant placeholder while chat is waiting for the endpoint", async () => {
     let resolveResponse!: (response: Response) => void;
     vi.spyOn(global, "fetch").mockReturnValueOnce(

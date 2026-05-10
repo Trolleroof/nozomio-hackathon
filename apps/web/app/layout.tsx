@@ -3,6 +3,8 @@ import { GeistMono } from "geist/font/mono";
 import { GeistPixelSquare } from "geist/font/pixel";
 import { GeistSans } from "geist/font/sans";
 
+import { RouteLoadingIndicator } from "@/components/route-loading-indicator";
+
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -25,7 +27,10 @@ export default function RootLayout({
       lang="en"
       className={`${GeistSans.variable} ${GeistMono.variable} ${GeistPixelSquare.variable}`}
     >
-      <body>{children}</body>
+      <body>
+        <RouteLoadingIndicator />
+        {children}
+      </body>
     </html>
   );
 }

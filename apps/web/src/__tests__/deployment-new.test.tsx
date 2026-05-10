@@ -1,6 +1,15 @@
 import "@testing-library/jest-dom";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { vi } from "vitest";
+
+const pushMock = vi.hoisted(() => vi.fn());
+
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/deployments/new",
+  useRouter: () => ({
+    push: pushMock
+  })
+}));
 
 import NewDeploymentPage from "../../app/deployments/new/page";
 
@@ -161,7 +170,7 @@ describe("NewDeploymentPage", () => {
     vi.restoreAllMocks();
   });
 
-  it("lets users remember a failed plan outcome for future agent runs", async () => {
+  it("deploys the generated plan and opens the deployment detail", async () => {
     vi.spyOn(global, "fetch")
       .mockResolvedValueOnce({
         ok: true,
@@ -186,19 +195,36 @@ describe("NewDeploymentPage", () => {
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          memoryInsights: ["Remembered failed Modal run for future planning."]
+          deployment: {
+            id: "dep_live_qwen",
+            planId: "plan_memory_write",
+            name: "Qwen/Qwen2.5-7B-Instruct",
+            modelId: "Qwen/Qwen2.5-7B-Instruct",
+            provider: "Modal",
+            accelerator: "NVIDIA L4",
+            status: "ready",
+            endpointUrl: "/api/gateway",
+            createdAt: "2026-05-09T22:01:00.000Z",
+            updatedAt: "2026-05-09T22:01:00.000Z",
+            logs: [],
+            healthChecks: [],
+            context: []
+          }
         })
       } as Response);
 
     render(<NewDeploymentPage />);
     fireEvent.click(screen.getByRole("button", { name: "Generate plan" }));
     await screen.findByText("Modal");
-    fireEvent.click(screen.getByRole("button", { name: "Remember failure" }));
+    expect(screen.queryByRole("button", { name: "Request approval" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Remember success" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Remember failure" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Deploy" }));
 
-    expect(await screen.findByText("Saved to session memory.")).toBeInTheDocument();
-    expect(global.fetch).toHaveBeenLastCalledWith("/api/crucible/memory", expect.objectContaining({
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/deployments/dep_live_qwen"));
+    expect(global.fetch).toHaveBeenNthCalledWith(2, "/api/crucible/deploy", expect.objectContaining({
       method: "POST",
-      body: expect.stringContaining("\"outcome\":\"failed\"")
+      body: expect.stringContaining("\"id\":\"plan_memory_write\"")
     }));
     vi.restoreAllMocks();
   });

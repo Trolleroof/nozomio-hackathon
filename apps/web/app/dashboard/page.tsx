@@ -66,7 +66,7 @@ export default async function DashboardPage() {
             )}
           </section>
 
-          <EndpointConsole />
+          <EndpointConsole deployments={deployments} />
         </div>
 
         <div className="space-y-5">

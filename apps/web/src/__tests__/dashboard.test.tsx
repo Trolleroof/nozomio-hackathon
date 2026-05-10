@@ -6,6 +6,13 @@ import ContextPage from "../../app/context/page";
 import DashboardPage from "../../app/dashboard/page";
 import DeploymentDetailPage from "../../app/deployments/[id]/page";
 
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/dashboard",
+  useRouter: () => ({
+    refresh: vi.fn()
+  })
+}));
+
 describe("DashboardPage", () => {
   afterEach(() => {
     vi.restoreAllMocks();
