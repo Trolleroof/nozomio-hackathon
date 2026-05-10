@@ -14,22 +14,10 @@ const modelOptions = [
   { value: "mistralai/Mistral-7B-Instruct-v0.3", label: "Mistral 7B Instruct" },
   { value: "meta-llama/Llama-3.1-8B-Instruct", label: "Llama 3.1 8B Instruct" }
 ];
-const objectives: { value: DeploymentObjective; label: string; description: string }[] = [
-  {
-    value: "cheapest",
-    label: "Cheapest",
-    description: "Minimize hourly cost and keep the first plan on one economical GPU when possible."
-  },
-  {
-    value: "reliable",
-    label: "Most reliable",
-    description: "Prefer the provider path most likely to reach a healthy OpenAI-compatible endpoint."
-  },
-  {
-    value: "low_latency",
-    label: "Lowest latency",
-    description: "Favor faster response time, even when the GPU choice may cost more."
-  }
+const objectives: { value: DeploymentObjective; label: string }[] = [
+  { value: "cheapest", label: "Cheapest" },
+  { value: "reliable", label: "Most reliable" },
+  { value: "low_latency", label: "Lowest latency" }
 ];
 
 export default function NewDeploymentPage() {
@@ -127,11 +115,11 @@ export default function NewDeploymentPage() {
             </div>
             <div>
               <div className="text-sm font-medium">Objective</div>
-              <div className="mt-2 grid gap-2">
+              <div className="mt-2 grid gap-2 sm:grid-cols-3">
                 {objectives.map((item) => (
                   <label
                     key={item.value}
-                    className={`rounded-md border p-3 text-sm transition ${
+                    className={`flex min-h-12 items-center justify-center rounded-md border px-3 py-2 text-center text-sm font-medium transition ${
                       objective === item.value
                         ? "border-accent bg-accent/10 text-foreground"
                         : "border-border bg-muted/40 text-muted-foreground hover:border-border-strong"
@@ -147,10 +135,7 @@ export default function NewDeploymentPage() {
                         checked={objective === item.value}
                         onChange={() => setObjective(item.value)}
                       />
-                      <span>
-                        <span className="block font-medium text-foreground">{item.label}</span>
-                        <span className="mt-1 block leading-5">{item.description}</span>
-                      </span>
+                      <span className="text-foreground">{item.label}</span>
                     </span>
                   </label>
                 ))}
@@ -162,7 +147,7 @@ export default function NewDeploymentPage() {
               </label>
               <textarea
                 id="intent-notes"
-                className="crucible-textarea mt-2 min-h-24 w-full"
+                className="crucible-textarea mt-2 min-h-20 w-full"
                 placeholder="Constraints, budget, provider preferences, launch window..."
                 value={notes}
                 onChange={(event) => setNotes(event.target.value)}
