@@ -1,5 +1,5 @@
 import "@testing-library/jest-dom";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import DashboardPage from "../../app/dashboard/page";
@@ -21,40 +21,16 @@ describe("OnboardingPage", () => {
     vi.restoreAllMocks();
   });
 
-  it("lets a first-time user choose a model and reliability objective before launching to the dashboard", async () => {
-    vi.spyOn(global, "fetch").mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        id: "plan_onboarding",
-        prompt: "Spin up Mistral-7B-Instruct optimized for reliability.",
-        modelId: "mistralai/Mistral-7B-Instruct-v0.3",
-        objective: "reliable",
-        recommendation: {
-          provider: "Modal",
-          accelerator: "NVIDIA A10G",
-          estimatedHourlyUsd: 1.1,
-          reason: "Modal keeps the first run on the most reliable live path.",
-          uncertainty: "Cold-start health still needs a live check."
-        },
-        approvalRequired: true,
-        approvalReason: "Approval required before launching paid GPU resources.",
-        status: "generated",
-        createdAt: "2026-05-09T22:00:00.000Z"
-      })
-    } as Response);
-
+  it("lets a first-time user choose a model and objective before opening the real deployment planner", () => {
     render(<OnboardingPage />);
 
     fireEvent.click(screen.getByRole("radio", { name: /Mistral 7B Instruct/i }));
     fireEvent.click(screen.getByRole("radio", { name: /Reliability/i }));
-    fireEvent.click(screen.getByRole("button", { name: "Launch model" }));
+    fireEvent.click(screen.getByRole("button", { name: "Continue to planner" }));
 
-    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/dashboard"));
-    expect(global.fetch).toHaveBeenCalledWith("/api/crucible/plan", expect.objectContaining({
-      method: "POST",
-      body: expect.stringContaining("\"objective\":\"reliable\"")
-    }));
-    expect(localStorage.getItem("crucible:onboarding-launch")).toContain("mistralai/Mistral-7B-Instruct-v0.3");
+    expect(pushMock).toHaveBeenCalledWith("/deployments/new?modelId=mistralai%2FMistral-7B-Instruct-v0.3&objective=reliable");
+    expect(localStorage.getItem("crucible:onboarding-complete")).toBe("true");
+    expect(localStorage.getItem("crucible:onboarding-launch")).toBeNull();
   });
 });
 
@@ -63,7 +39,7 @@ describe("DashboardPage onboarding launch", () => {
     localStorage.clear();
   });
 
-  it("shows the selected first-run model as a live spin-up on the dashboard", async () => {
+  it("ignores stale first-run launch state instead of showing a fake spin-up", async () => {
     localStorage.setItem("crucible:onboarding-launch", JSON.stringify({
       id: "launch_onboarding",
       planId: "plan_onboarding",
@@ -79,9 +55,8 @@ describe("DashboardPage onboarding launch", () => {
 
     render(await DashboardPage());
 
-    expect(await screen.findByText("Live first model launch")).toBeInTheDocument();
-    expect(screen.getByText("mistralai/Mistral-7B-Instruct-v0.3")).toBeInTheDocument();
-    expect(screen.getByText("Optimizing for reliability")).toBeInTheDocument();
-    expect(screen.getAllByText("Provisioning").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Live first model launch")).not.toBeInTheDocument();
+    expect(screen.queryByText("mistralai/Mistral-7B-Instruct-v0.3")).not.toBeInTheDocument();
+    expect(screen.getByText("No live deployments found. Start the AnyGPU gateway or deploy a real model to populate this list.")).toBeInTheDocument();
   });
 });

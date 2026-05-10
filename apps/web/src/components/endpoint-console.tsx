@@ -33,7 +33,6 @@ type ChatMessage = {
   content: string;
 };
 
-const fallbackBaseUrl = "http://127.0.0.1:8765/v1";
 const isTest = process.env.NODE_ENV === "test";
 
 export function EndpointConsole({ deployments = [] }: { deployments?: Deployment[] }) {
@@ -44,20 +43,20 @@ export function EndpointConsole({ deployments = [] }: { deployments?: Deployment
   ), [deployments]);
   const newestDeployment = liveDeployments[0];
   const [gateway, setGateway] = useState<GatewayStatus>({
-    baseUrl: newestDeployment?.endpointUrl ?? fallbackBaseUrl,
+    baseUrl: newestDeployment?.endpointUrl ?? "",
     ok: false,
     status: 0,
     models: []
   });
   const [loadingStatus, setLoadingStatus] = useState(!isTest);
   const [selectedDeploymentId, setSelectedDeploymentId] = useState(newestDeployment?.id ?? "");
-  const [model, setModel] = useState(newestDeployment?.modelId ?? "local-chat");
+  const [model, setModel] = useState(newestDeployment?.modelId ?? "");
   const [prompt, setPrompt] = useState("Say hello from AnyGPU");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [sending, setSending] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
   const selectedDeployment = liveDeployments.find((deployment) => deployment.id === selectedDeploymentId) ?? newestDeployment;
-  const selectedEndpointBase = selectedDeployment?.endpointUrl ?? gateway.baseUrl;
+  const selectedEndpointBase = selectedDeployment?.endpointUrl ?? "";
 
   async function refreshStatus() {
     if (typeof fetch === "undefined") {
@@ -68,7 +67,7 @@ export function EndpointConsole({ deployments = [] }: { deployments?: Deployment
       const response = await fetch("/api/gateway/models", { cache: "no-store" });
       const data = (await response.json()) as GatewayStatus;
       setGateway(data);
-      if (data.models[0]?.id) {
+      if (!liveDeployments.length && data.models[0]?.id) {
         setModel((current) => current || data.models[0].id);
       }
     } catch (error) {
@@ -93,8 +92,8 @@ export function EndpointConsole({ deployments = [] }: { deployments?: Deployment
     if (loadingStatus) {
       return "checking";
     }
-    return gateway.ok ? "online" : "offline";
-  }, [gateway.ok, loadingStatus]);
+    return selectedDeployment && gateway.ok ? "online" : "offline";
+  }, [gateway.ok, loadingStatus, selectedDeployment]);
 
   const selectedModel = gateway.models.find((item) => item.id === model);
   const routeMode = selectedModel?.anygpu?.test_fixture
@@ -109,6 +108,10 @@ export function EndpointConsole({ deployments = [] }: { deployments?: Deployment
     event.preventDefault();
     const trimmed = prompt.trim();
     if (!trimmed || sending) {
+      return;
+    }
+    if (!selectedDeployment) {
+      setChatError("No live deployment is selected.");
       return;
     }
     const nextMessages: ChatMessage[] = [...messages, { role: "user", content: trimmed }];
@@ -198,22 +201,10 @@ export function EndpointConsole({ deployments = [] }: { deployments?: Deployment
                 </>
               ) : (
                 <>
-                  <div className="text-xs text-muted-foreground">Model</div>
-                  <select
-                    className="crucible-input mt-1 min-h-9 w-full text-sm"
-                    value={model}
-                    onChange={(event) => setModel(event.target.value)}
-                  >
-                    {gateway.models.length ? (
-                      gateway.models.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.id}
-                        </option>
-                      ))
-                    ) : (
-                      <option value={model}>{model}</option>
-                    )}
-                  </select>
+                  <div className="text-xs text-muted-foreground">Live deployment</div>
+                  <div className="mt-1 min-h-9 rounded-md border border-border bg-muted px-3 py-2 text-sm text-muted-foreground">
+                    None
+                  </div>
                 </>
               )}
             </div>
@@ -230,15 +221,15 @@ export function EndpointConsole({ deployments = [] }: { deployments?: Deployment
           <dl className="mt-4 space-y-3 text-sm">
             <div>
               <dt className="text-muted-foreground">base_url</dt>
-              <dd className="crucible-code mt-1 break-all px-3 py-2">{selectedEndpointBase}</dd>
+              <dd className="crucible-code mt-1 break-all px-3 py-2">{selectedEndpointBase || "No live deployment"}</dd>
             </div>
             <div>
               <dt className="text-muted-foreground">Models route</dt>
-              <dd className="crucible-code mt-1 break-all px-3 py-2">{`${selectedEndpointBase}/models`}</dd>
+              <dd className="crucible-code mt-1 break-all px-3 py-2">{selectedEndpointBase ? `${selectedEndpointBase}/models` : "No live deployment"}</dd>
             </div>
             <div>
               <dt className="text-muted-foreground">Chat route</dt>
-              <dd className="crucible-code mt-1 break-all px-3 py-2">{`${selectedEndpointBase}/chat/completions`}</dd>
+              <dd className="crucible-code mt-1 break-all px-3 py-2">{selectedEndpointBase ? `${selectedEndpointBase}/chat/completions` : "No live deployment"}</dd>
             </div>
             {selectedModel?.anygpu?.upstream_url ? (
               <div>
@@ -266,7 +257,7 @@ export function EndpointConsole({ deployments = [] }: { deployments?: Deployment
                 Open deployment
               </Link>
             ) : (
-              <span className="truncate text-xs text-muted-foreground">{model}</span>
+              <span className="truncate text-xs text-muted-foreground">No deployment</span>
             )}
           </div>
 
@@ -289,7 +280,7 @@ export function EndpointConsole({ deployments = [] }: { deployments?: Deployment
               ))
             ) : (
               <div className="flex h-full items-center justify-center rounded-md border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-                Send a prompt to test the selected OpenAI-compatible model.
+                {selectedDeployment ? "Send a prompt to test the selected OpenAI-compatible model." : "No live deployment is available to chat with."}
               </div>
             )}
             {sending ? (
@@ -320,12 +311,13 @@ export function EndpointConsole({ deployments = [] }: { deployments?: Deployment
                 onChange={(event) => setPrompt(event.target.value)}
                 rows={1}
                 placeholder="Message the endpoint"
+                disabled={!selectedDeployment}
               />
               <button
                 aria-label={sending ? "Sending message" : undefined}
                 className="crucible-primary h-11 w-11 shrink-0 p-0"
                 type="submit"
-                disabled={sending}
+                disabled={sending || !selectedDeployment}
               >
                 {sending ? (
                   <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" />

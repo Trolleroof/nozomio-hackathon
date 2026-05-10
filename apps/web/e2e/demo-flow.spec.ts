@@ -11,9 +11,8 @@ test("judge demo flow is visible end to end", async ({ page }) => {
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Create account" }).click();
   await expect(page.getByRole("heading", { name: "Choose your first model" })).toBeVisible();
-  await page.getByRole("button", { name: "Launch model" }).click();
-  await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
-  await expect(page.getByText("Live first model launch")).toBeVisible();
+  await page.getByRole("button", { name: "Continue to planner" }).click();
+  await expect(page.getByRole("heading", { name: "New deployment" })).toBeVisible();
 
   await page.goto("/login");
   await page.getByLabel("Email").fill(email);
@@ -30,13 +29,7 @@ test("judge demo flow is visible end to end", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Generating plan" })).toBeVisible();
   await expect(page.getByText("Approval required")).toBeVisible({ timeout: 20000 });
   await page.getByRole("button", { name: "Deploy" }).click();
-  await expect(page).toHaveURL(/\/deployments\/dep_/);
-  await expect(page.getByRole("heading", { name: "Qwen/Qwen2.5-7B-Instruct" })).toBeVisible();
-  await page.getByLabel("Test prompt").fill("Is this deployment ready?");
-  await page.getByRole("button", { name: "Send test request" }).click();
-  await expect(page.getByText("built-in Crucible demo gateway")).toBeVisible();
-  await page.getByRole("button", { name: "Stop deployment" }).click();
-  await expect(page.getByText("Deployment stopped.")).toBeVisible();
+  await expect(page.getByText(/No live AnyGPU gateway is configured|Endpoint/)).toBeVisible({ timeout: 20000 });
 
   await page.goto("/providers");
   await expect(page.getByText("Live deploy supported")).toBeVisible();

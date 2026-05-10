@@ -1,9 +1,14 @@
 node_modules
+**/node_modules
+apps/web/node_modules
 .git
 .venv
+.pnpm-store
 .pytest_cache
 __pycache__
 .next
+**/.next
+apps/web/.next
 dist
 build
 .DS_Store
@@ -12,6 +17,8 @@ build
 .env.*.local
 launch-video/node_modules
 launch-video/.remotion
+apps/web/test-results
+apps/web/playwright-report
 *.log
 .turbo
 .idea
@@ -19,4 +26,3 @@ tests
 models
 .vscode
 anygpu/__pycache__
-pnpm-lock.yaml

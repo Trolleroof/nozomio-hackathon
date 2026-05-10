@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 describe("gateway routes", () => {
-  it("returns a built-in demo model when no external gateway is configured", async () => {
+  it("returns no models when no external gateway is configured", async () => {
     vi.resetModules();
     vi.stubEnv("ANYGPU_GATEWAY_BASE_URL", "");
 
@@ -10,19 +10,14 @@ describe("gateway routes", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(body.ok).toBe(true);
-    expect(body.baseUrl).toBe("/api/gateway");
-    expect(body.models[0]).toEqual(expect.objectContaining({
-      id: "Qwen/Qwen2.5-7B-Instruct",
-      anygpu: expect.objectContaining({
-        provider: "Crucible demo",
-        simulated: true
-      })
-    }));
+    expect(body.ok).toBe(false);
+    expect(body.baseUrl).toBe("");
+    expect(body.models).toEqual([]);
+    expect(body.error).toBe("No live AnyGPU gateway is configured.");
     vi.unstubAllEnvs();
   });
 
-  it("answers chat requests through the built-in demo gateway when no runtime is configured", async () => {
+  it("rejects chat requests when no runtime is configured", async () => {
     vi.resetModules();
     vi.stubEnv("ANYGPU_GATEWAY_BASE_URL", "");
     vi.stubEnv("INSFORGE_API_BASE_URL", "");
@@ -38,10 +33,8 @@ describe("gateway routes", () => {
     }));
     const body = await response.json();
 
-    expect(response.status).toBe(200);
-    expect(body.choices[0].message.content).toContain("Qwen/Qwen2.5-7B-Instruct");
-    expect(body.choices[0].message.content).toContain("ready");
-    expect(body.anygpu.simulated).toBe(true);
+    expect(response.status).toBe(503);
+    expect(body.error).toBe("No live deployment endpoint is configured.");
     vi.unstubAllEnvs();
   });
 });

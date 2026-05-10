@@ -21,7 +21,7 @@ const plan: DeploymentPlan = {
 };
 
 describe("Crucible deployments", () => {
-  it("creates a usable demo deployment when no external gateway is configured", async () => {
+  it("refuses to create a deployment when no external gateway is configured", async () => {
     vi.resetModules();
     vi.stubEnv("ANYGPU_GATEWAY_BASE_URL", "");
     vi.stubEnv("INSFORGE_API_BASE_URL", "");
@@ -29,20 +29,42 @@ describe("Crucible deployments", () => {
 
     const { deployPlan, getStoredDeployment } = await import("../lib/crucible-deployments");
 
+    await expect(deployPlan(plan)).rejects.toThrow("No live AnyGPU gateway is configured");
+    await expect(getStoredDeployment("missing")).resolves.toBeNull();
+    vi.unstubAllEnvs();
+  });
+
+  it("creates a stored deployment only from a verified live gateway", async () => {
+    vi.resetModules();
+    vi.stubEnv("ANYGPU_GATEWAY_BASE_URL", "https://gateway.example/v1");
+    vi.stubEnv("INSFORGE_API_BASE_URL", "");
+    vi.stubEnv("CRUCIBLE_DEPLOYMENT_STORE_PATH", `/tmp/crucible-deployments-${Date.now()}-${Math.random()}.json`);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200
+    }));
+
+    const { deployPlan, getStoredDeployment } = await import("../lib/crucible-deployments");
     const deployment = await deployPlan(plan);
 
+    expect(fetch).toHaveBeenCalledWith("https://gateway.example/v1/models", expect.objectContaining({ cache: "no-store" }));
     expect(deployment.status).toBe("ready");
-    expect(deployment.endpointUrl).toBe("/api/gateway");
-    expect(deployment.logs.map((log) => log.message).join("\n")).toContain("built-in demo gateway");
+    expect(deployment.endpointUrl).toBe("https://gateway.example/v1");
+    expect(deployment.logs.map((log) => log.message).join("\n")).toContain("AnyGPU gateway");
     await expect(getStoredDeployment(deployment.id)).resolves.toEqual(deployment);
+    vi.unstubAllGlobals();
     vi.unstubAllEnvs();
   });
 
   it("stops a stored deployment and records the control-plane event", async () => {
     vi.resetModules();
-    vi.stubEnv("ANYGPU_GATEWAY_BASE_URL", "");
+    vi.stubEnv("ANYGPU_GATEWAY_BASE_URL", "https://gateway.example/v1");
     vi.stubEnv("INSFORGE_API_BASE_URL", "");
     vi.stubEnv("CRUCIBLE_DEPLOYMENT_STORE_PATH", `/tmp/crucible-deployments-${Date.now()}-${Math.random()}.json`);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200
+    }));
 
     const { deployPlan, getStoredDeployment, stopStoredDeployment } = await import("../lib/crucible-deployments");
     const deployment = await deployPlan(plan);
@@ -52,6 +74,7 @@ describe("Crucible deployments", () => {
     expect(stopped.status).toBe("stopped");
     expect(stopped.logs.at(0)?.message).toContain("Stop requested");
     await expect(getStoredDeployment(deployment.id)).resolves.toEqual(expect.objectContaining({ status: "stopped" }));
+    vi.unstubAllGlobals();
     vi.unstubAllEnvs();
   });
 });

@@ -7,12 +7,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { BrandMark } from "@/components/brand-mark";
-import { generateDeploymentPlan } from "@/lib/crucible-client";
-import {
-  createOnboardingLaunch,
-  onboardingCompleteStorageKey,
-  onboardingLaunchStorageKey
-} from "@/lib/onboarding-launch";
+import { onboardingCompleteStorageKey } from "@/lib/onboarding-launch";
 
 const modelOptions = [
   {
@@ -71,34 +66,20 @@ export default function OnboardingPage() {
   const router = useRouter();
   const [modelId, setModelId] = useState(modelOptions[1].id);
   const [objective, setObjective] = useState<DeploymentObjective>("cheapest");
-  const [status, setStatus] = useState<"idle" | "launching">("idle");
-  const [error, setError] = useState<string | null>(null);
 
   const selectedModel = modelOptions.find((model) => model.id === modelId) ?? modelOptions[0];
-  const selectedObjective = objectiveOptions.find((item) => item.value === objective) ?? objectiveOptions[0];
 
-  async function handleLaunch() {
-    setStatus("launching");
-    setError(null);
+  function handleContinue() {
+    const params = new URLSearchParams({
+      modelId: selectedModel.id,
+      objective
+    });
     try {
-      const plan = await generateDeploymentPlan({
-        prompt: `Spin up ${selectedModel.name} optimized for ${selectedObjective.label.toLowerCase()}.`,
-        modelId: selectedModel.id,
-        objective,
-        stopPolicy: "demo_window"
-      });
-      const launch = createOnboardingLaunch(plan, selectedModel.name);
-      localStorage.setItem(onboardingLaunchStorageKey, JSON.stringify(launch));
       localStorage.setItem(onboardingCompleteStorageKey, "true");
-      router.push("/dashboard");
-      if (process.env.NODE_ENV !== "test") {
-        window.location.assign("/dashboard");
-      }
-    } catch (launchError) {
-      setError(launchError instanceof Error ? launchError.message : "Launch failed.");
-    } finally {
-      setStatus("idle");
+    } catch {
+      // Continue even if localStorage is blocked.
     }
+    router.push(`/deployments/new?${params.toString()}`);
   }
 
   return (
@@ -122,8 +103,8 @@ export default function OnboardingPage() {
               Choose your first model
             </h1>
             <p className="mt-4 text-sm leading-6 text-muted-foreground">
-              Pick a model and what Crucible should optimize for. The next step generates a live plan,
-              starts the spin-up state, and lands you on the operational dashboard.
+              Pick a model and what Crucible should optimize for. The next step opens the deployment
+              planner; provisioning only starts after a real backend gateway is available.
             </p>
             <div className="mt-6 rounded-md border border-border bg-muted p-4 text-sm leading-6 text-muted-foreground">
               <div className="flex items-center gap-2 text-foreground">
@@ -193,19 +174,12 @@ export default function OnboardingPage() {
               </div>
             </section>
 
-            {error ? (
-              <div className="rounded-md border border-ember/40 bg-ember/10 p-3 text-sm text-ember">
-                {error}
-              </div>
-            ) : null}
-
             <button
               type="button"
               className="crucible-primary min-h-11 w-full gap-2 px-5 sm:w-auto"
-              onClick={handleLaunch}
-              disabled={status === "launching"}
+              onClick={handleContinue}
             >
-              {status === "launching" ? "Launching model" : "Launch model"}
+              Continue to planner
               <ArrowRight aria-hidden="true" className="h-4 w-4" />
             </button>
           </div>

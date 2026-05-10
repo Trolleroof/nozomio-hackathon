@@ -9,7 +9,6 @@ interface DeploymentStore {
   deployments: Deployment[];
 }
 
-const defaultGatewayBaseUrl = "http://127.0.0.1:8765/v1";
 export const deploymentCookieIndexName = "crucible_deployment_ids";
 
 export function deploymentCookieName(id: string) {
@@ -152,28 +151,23 @@ async function resolveDeploymentGateway(plan: DeploymentPlan) {
     };
   }
 
-  const insforgeBaseUrl = process.env.INSFORGE_API_BASE_URL?.trim();
-  if (insforgeBaseUrl) {
-    return {
-      endpointUrl: "/api/gateway",
-      label: "InsForge model gateway"
-    };
-  }
-
-  return {
-    endpointUrl: "/api/gateway",
-    label: "built-in demo gateway"
-  };
+  throw new Error("No live AnyGPU gateway is configured. Start or deploy a model gateway before creating a deployment.");
 }
 
 async function verifyOpenAiGateway(endpointUrl: string) {
   const response = await fetch(`${endpointUrl}/models`, {
+    headers: gatewayHeaders(),
     cache: "no-store",
     signal: AbortSignal.timeout(5000)
   });
   if (!response.ok) {
     throw new Error(`AnyGPU gateway /models check failed with HTTP ${response.status}.`);
   }
+}
+
+function gatewayHeaders() {
+  const apiKey = process.env.ANYGPU_GATEWAY_API_KEY?.trim();
+  return apiKey ? { Authorization: `Bearer ${apiKey}` } : undefined;
 }
 
 function saveDeployment(deployment: Deployment) {
