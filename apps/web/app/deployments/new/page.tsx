@@ -1,39 +1,50 @@
 "use client";
 
 import type { DeploymentObjective, DeploymentPlan } from "@crucible/shared/crucible-contract";
-import { CircleCheck, Cpu, ShieldCheck, TriangleAlert } from "lucide-react";
+import { Cpu, Rocket } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { AppFrame } from "@/components/app-frame";
 import { StatusBadge } from "@/components/status-badge";
-import { generateDeploymentPlan } from "@/lib/crucible-client";
+import { deployDeploymentPlan, generateDeploymentPlan } from "@/lib/crucible-client";
 import { formatCurrency } from "@/lib/format";
 
-const defaultPrompt = "Deploy Qwen 7B cheaply. Avoid multi-GPU unless required.";
+const modelOptions = [
+  { value: "Qwen/Qwen2.5-7B-Instruct", label: "Qwen 2.5 7B Instruct" },
+  { value: "mistralai/Mistral-7B-Instruct-v0.3", label: "Mistral 7B Instruct" },
+  { value: "meta-llama/Llama-3.1-8B-Instruct", label: "Llama 3.1 8B Instruct" }
+];
 const objectives: { value: DeploymentObjective; label: string }[] = [
-  { value: "cheapest", label: "cheapest" },
-  { value: "reliable", label: "reliable" },
-  { value: "low_latency", label: "low latency" },
-  { value: "balanced", label: "balanced" }
+  { value: "cheapest", label: "Cheapest" },
+  { value: "reliable", label: "Most reliable" },
+  { value: "low_latency", label: "Lowest latency" }
 ];
 
 export default function NewDeploymentPage() {
-  const [prompt, setPrompt] = useState(defaultPrompt);
-  const [modelId, setModelId] = useState("Qwen/Qwen2.5-7B-Instruct");
-  const [objective, setObjective] = useState<DeploymentObjective>("cheapest");
-  const [stopPolicy, setStopPolicy] = useState("manual");
+  const router = useRouter();
+  const [initialParams] = useState(readInitialDeploymentParams);
+  const [modelId, setModelId] = useState(initialParams.modelOption ?? modelOptions[0].value);
+  const [customModel, setCustomModel] = useState(initialParams.customModel ?? "");
+  const [objective, setObjective] = useState<DeploymentObjective>(initialParams.objective ?? "cheapest");
+  const [notes, setNotes] = useState("");
   const [plan, setPlan] = useState<DeploymentPlan | null>(null);
-  const [memoryStatus, setMemoryStatus] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isDeploying, setIsDeploying] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const resolvedModelId = normalizeHuggingFaceModel(customModel) || modelId;
 
   async function handleGenerate() {
     setIsGenerating(true);
     setError(null);
     try {
-      const nextPlan = await generateDeploymentPlan({ prompt, modelId, objective, stopPolicy });
+      const nextPlan = await generateDeploymentPlan({
+        modelId: resolvedModelId,
+        objective,
+        notes: notes.trim()
+      });
       setPlan(nextPlan);
-      setMemoryStatus(null);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Plan generation failed.");
     } finally {
@@ -41,29 +52,19 @@ export default function NewDeploymentPage() {
     }
   }
 
-  async function handleRemember(outcome: "ready" | "failed") {
+  async function handleDeploy() {
     if (!plan) {
       return;
     }
-    setMemoryStatus("Saving memory...");
-    const lesson = outcome === "failed"
-      ? `${plan.recommendation.provider} ${plan.recommendation.accelerator} failed or was rejected for ${plan.modelId}; avoid repeating without a new health signal.`
-      : `${plan.recommendation.provider} ${plan.recommendation.accelerator} worked for ${plan.modelId}; prefer it when the objective matches.`;
-    const response = await fetch("/api/crucible/memory", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ plan, outcome, lesson })
-    });
-    const body = await response.json();
-    if (!response.ok) {
-      setMemoryStatus(body.error || "Memory update failed.");
-      return;
+    setIsDeploying(true);
+    setError(null);
+    try {
+      const deployment = await deployDeploymentPlan(plan);
+      router.push(`/deployments/${deployment.id}`);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Deployment failed.");
+      setIsDeploying(false);
     }
-    setPlan({
-      ...plan,
-      memoryInsights: Array.isArray(body.memoryInsights) ? body.memoryInsights : plan.memoryInsights
-    });
-    setMemoryStatus("Saved to session memory.");
   }
 
   return (
@@ -76,64 +77,79 @@ export default function NewDeploymentPage() {
         <section className="crucible-card">
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium" htmlFor="deployment-request">
-                Deployment request
+              <label className="block text-sm font-medium" htmlFor="model-select">
+                Model
               </label>
-              <textarea
-                id="deployment-request"
-                className="crucible-textarea mt-2 min-h-32 w-full"
-                value={prompt}
-                onChange={(event) => setPrompt(event.target.value)}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium" htmlFor="model-id">
-                Model ID
-              </label>
-              <input
-                id="model-id"
+              <select
+                id="model-select"
                 className="crucible-input mt-2 min-h-11 w-full"
                 value={modelId}
                 onChange={(event) => setModelId(event.target.value)}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium" htmlFor="objective">
-                Objective
-              </label>
-              <select
-                id="objective"
-                className="crucible-input mt-2 min-h-11 w-full"
-                value={objective}
-                onChange={(event) => setObjective(event.target.value as DeploymentObjective)}
               >
-                {objectives.map((item) => (
-                  <option key={item.value} value={item.value}>
-                    {item.label}
+                {modelOptions.map((model) => (
+                  <option key={model.value} value={model.value}>
+                    {model.label}
                   </option>
                 ))}
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium" htmlFor="stop-policy">
-                Stop policy
+              <label className="block text-sm font-medium" htmlFor="model-link">
+                Hugging Face link or model ID
               </label>
-              <select
-                id="stop-policy"
+              <input
+                id="model-link"
                 className="crucible-input mt-2 min-h-11 w-full"
-                value={stopPolicy}
-                onChange={(event) => setStopPolicy(event.target.value)}
-              >
-                <option value="manual">Manual stop only</option>
-                <option value="idle_30">Stop after 30 idle minutes</option>
-                <option value="demo_window">Stop after test window</option>
-              </select>
+                placeholder="https://huggingface.co/org/model"
+                value={customModel}
+                onChange={(event) => setCustomModel(event.target.value)}
+              />
+            </div>
+            <div>
+              <div className="text-sm font-medium">Objective</div>
+              <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                {objectives.map((item) => (
+                  <label
+                    key={item.value}
+                    className={`flex min-h-12 items-center justify-center rounded-md border px-3 py-2 text-center text-sm font-medium transition ${
+                      objective === item.value
+                        ? "border-accent bg-accent/10 text-foreground"
+                        : "border-border bg-muted/40 text-muted-foreground hover:border-border-strong"
+                    }`}
+                  >
+                    <span className="flex items-start gap-3">
+                      <input
+                        aria-label={item.label}
+                        className="mt-1 accent-accent"
+                        type="radio"
+                        name="objective"
+                        value={item.value}
+                        checked={objective === item.value}
+                        onChange={() => setObjective(item.value)}
+                      />
+                      <span className="text-foreground">{item.label}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium" htmlFor="intent-notes">
+                Optional notes
+              </label>
+              <textarea
+                id="intent-notes"
+                className="crucible-textarea mt-2 min-h-20 w-full"
+                placeholder="Constraints, budget, provider preferences, launch window..."
+                value={notes}
+                onChange={(event) => setNotes(event.target.value)}
+              />
             </div>
             <button
               className="crucible-primary min-h-11 gap-2 px-5"
               type="button"
               onClick={handleGenerate}
-              disabled={isGenerating}
+              disabled={isGenerating || !resolvedModelId}
             >
               <Cpu aria-hidden="true" className={`h-4 w-4 ${isGenerating ? "animate-pulse" : ""}`} />
               {isGenerating ? "Generating plan" : "Generate plan"}
@@ -207,31 +223,14 @@ export default function NewDeploymentPage() {
                 </div>
               ) : null}
               <button
-                className="crucible-secondary min-h-10 gap-2"
+                className="crucible-primary min-h-11 gap-2 px-5"
                 type="button"
+                onClick={handleDeploy}
+                disabled={isDeploying}
               >
-                <ShieldCheck aria-hidden="true" className="h-4 w-4" />
-                Request approval
+                <Rocket aria-hidden="true" className={`h-4 w-4 ${isDeploying ? "animate-pulse" : ""}`} />
+                {isDeploying ? "Deploying" : "Deploy"}
               </button>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  className="crucible-secondary min-h-10 gap-2"
-                  type="button"
-                  onClick={() => handleRemember("ready")}
-                >
-                  <CircleCheck aria-hidden="true" className="h-4 w-4" />
-                  Remember success
-                </button>
-                <button
-                  className="crucible-secondary min-h-10 gap-2"
-                  type="button"
-                  onClick={() => handleRemember("failed")}
-                >
-                  <TriangleAlert aria-hidden="true" className="h-4 w-4" />
-                  Remember failure
-                </button>
-              </div>
-              {memoryStatus ? <p className="text-sm text-muted-foreground">{memoryStatus}</p> : null}
             </div>
           ) : (
             <div className="mt-4 max-w-md text-sm leading-6 text-muted-foreground">
@@ -242,4 +241,42 @@ export default function NewDeploymentPage() {
       </div>
     </AppFrame>
   );
+}
+
+function normalizeHuggingFaceModel(value: string) {
+  const raw = value.trim();
+  if (!raw) {
+    return "";
+  }
+  try {
+    const url = new URL(raw);
+    if (url.hostname === "huggingface.co" || url.hostname.endsWith(".huggingface.co")) {
+      const [owner, model] = url.pathname.split("/").filter(Boolean);
+      if (owner && model) {
+        return `${owner}/${model}`;
+      }
+    }
+  } catch {
+    // Keep plain model IDs as entered.
+  }
+  return raw.replace(/^huggingface\.co\//, "").replace(/^https?:\/\/huggingface\.co\//, "");
+}
+
+function readInitialDeploymentParams() {
+  if (typeof window === "undefined") {
+    return {};
+  }
+  const params = new URLSearchParams(window.location.search);
+  const requestedModel = normalizeHuggingFaceModel(params.get("modelId") ?? "");
+  const knownModel = modelOptions.find((model) => model.value === requestedModel)?.value;
+  const requestedObjective = params.get("objective");
+  const objective = objectives.some((item) => item.value === requestedObjective)
+    ? (requestedObjective as DeploymentObjective)
+    : undefined;
+
+  return {
+    modelOption: knownModel,
+    customModel: requestedModel && !knownModel ? requestedModel : undefined,
+    objective
+  };
 }

@@ -6,6 +6,7 @@ from typing import Any
 import pytest
 
 from mcp_server.models import GpuOffer
+from mcp_server import deploy as deploy_module
 from mcp_server.providers import runpod
 
 
@@ -88,6 +89,69 @@ def test_fetch_uses_on_demand_price_for_launchable_offers(monkeypatch: pytest.Mo
     assert offers[0].price_per_hr == 0.17
 
 
+def test_deploy_runpod_launch_mutation_matches_current_schema(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RUNPOD_API_KEY", "test-token")
+    client = FakeAsyncClient(
+        {
+            "data": {
+                "podFindAndDeployOnDemand": {
+                    "id": "pod_123",
+                    "machine": {"podHostId": "host_123"},
+                    "runtime": {"ports": []},
+                }
+            }
+        }
+    )
+    monkeypatch.setattr("httpx.AsyncClient", lambda: client)
+    monkeypatch.setattr(deploy_module, "_poll_runpod_endpoint", _fake_poll_runpod_endpoint)
+    offer = GpuOffer(
+        provider="runpod",
+        instance_id="ondemand:NVIDIA RTX A5000",
+        gpu_type="RTX A5000",
+        gpu_count=1,
+        vram_gb=24,
+        price_per_hr=0.16,
+        available=True,
+        region="global",
+    )
+
+    instance = asyncio.run(deploy_module._deploy_runpod(offer, "test-vllm-key"))
+
+    launch_query = client.posts[0]["json"]["query"]
+    assert instance.instance_id == "pod_123"
+    assert "publicIp" not in launch_query
+    assert "podHostId" in launch_query
+
+
+def test_deploy_runpod_surfaces_graphql_launch_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RUNPOD_API_KEY", "test-token")
+    client = FakeAsyncClient(
+        {
+            "errors": [
+                {
+                    "message": "Something went wrong. Please try again later or contact support.",
+                    "path": ["podFindAndDeployOnDemand"],
+                }
+            ],
+            "data": {"podFindAndDeployOnDemand": None},
+        }
+    )
+    monkeypatch.setattr("httpx.AsyncClient", lambda: client)
+    offer = GpuOffer(
+        provider="runpod",
+        instance_id="ondemand:NVIDIA RTX A5000",
+        gpu_type="RTX A5000",
+        gpu_count=1,
+        vram_gb=24,
+        price_per_hr=0.16,
+        available=True,
+        region="global",
+    )
+
+    with pytest.raises(RuntimeError, match="Something went wrong"):
+        asyncio.run(deploy_module._deploy_runpod(offer, "test-vllm-key"))
+
+
 def test_launch_raises_graphql_errors(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RUNPOD_API_KEY", "test-token")
     client = FakeAsyncClient({"errors": [{"message": "Field bidPerGpu is not defined"}]})
@@ -105,3 +169,21 @@ def test_launch_raises_graphql_errors(monkeypatch: pytest.MonkeyPatch) -> None:
 
     with pytest.raises(RuntimeError, match="Field bidPerGpu is not defined"):
         asyncio.run(runpod.launch(offer))
+
+
+async def _fake_poll_runpod_endpoint(_pod_id: str, _vllm_api_key: str, timeout: int = 600) -> str:
+    return "http://127.0.0.1:8000/v1"
+
+
+def test_modal_credentials_can_load_from_local_modal_config(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("MODAL_TOKEN_ID", raising=False)
+    monkeypatch.delenv("MODAL_TOKEN_SECRET", raising=False)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / ".modal.toml").write_text(
+        '[test-profile]\n'
+        'token_id = "local-token-id"\n'
+        'token_secret = "local-token-secret"\n'
+    )
+
+    assert deploy_module._required_env("MODAL_TOKEN_ID") == "local-token-id"
+    assert deploy_module._required_env("MODAL_TOKEN_SECRET") == "local-token-secret"

@@ -4,6 +4,7 @@ apps/web/node_modules
 .git
 .venv
 .pnpm-store
+venv
 .pytest_cache
 __pycache__
 .next
@@ -26,3 +27,4 @@ tests
 models
 .vscode
 anygpu/__pycache__
+anygpu_local.egg-info

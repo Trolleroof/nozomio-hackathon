@@ -1,10 +1,20 @@
 import { NextResponse } from "next/server";
 
-const gatewayBaseUrl = process.env.ANYGPU_GATEWAY_BASE_URL ?? "http://127.0.0.1:8765/v1";
-
 export async function GET() {
+  const gatewayBaseUrl = process.env.ANYGPU_GATEWAY_BASE_URL?.trim().replace(/\/$/, "");
+  if (!gatewayBaseUrl) {
+    return NextResponse.json({
+      baseUrl: "",
+      ok: false,
+      status: 0,
+      models: [],
+      error: "No live AnyGPU gateway is configured."
+    });
+  }
+
   try {
     const response = await fetch(`${gatewayBaseUrl}/models`, {
+      headers: gatewayHeaders(),
       cache: "no-store",
       signal: AbortSignal.timeout(3000)
     });
@@ -31,4 +41,9 @@ export async function GET() {
       { status: 502 }
     );
   }
+}
+
+function gatewayHeaders() {
+  const apiKey = process.env.ANYGPU_GATEWAY_API_KEY?.trim();
+  return apiKey ? { Authorization: `Bearer ${apiKey}` } : undefined;
 }

@@ -1,0 +1,29 @@
+name: nozomio-rl-gpu-smoke
+
+resources:
+  cloud: aws
+  accelerators: T4:1
+  use_spot: true
+  disk_size: 50
+
+workdir: .
+
+setup: |
+  python -m pip install --upgrade pip
+  python -m pip install torch --index-url https://download.pytorch.org/whl/cu124
+
+run: |
+  mkdir -p .anygpu/rl_runs
+  python experiments/modal_rl_smoke.py \
+    --gpu-type skypilot-aws-t4 \
+    --updates 3 \
+    --n-envs 4096 \
+    --rollout-steps 16 \
+    --ppo-epochs 2 \
+    --minibatch-size 8192 \
+    --eval-envs 4096 \
+    --target-success-rate 0.90 \
+    --min-success-delta 0.25 \
+    --require-cuda \
+    --output .anygpu/rl_runs/skypilot_rl_t4_run.json
+  python experiments/audit_rl_result.py .anygpu/rl_runs/skypilot_rl_t4_run.json

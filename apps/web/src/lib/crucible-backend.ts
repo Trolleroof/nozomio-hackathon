@@ -4,8 +4,11 @@ import { join, resolve } from "node:path";
 
 import type {
   DeploymentObjective,
-  DeploymentPlan
+  DeploymentPlan,
+  NiaContextSnippet
 } from "@crucible/shared/crucible-contract";
+
+import { generateServerDeploymentPlan } from "./crucible-server";
 
 export interface BackendDeploymentPlanInput {
   userId: string;
@@ -14,6 +17,8 @@ export interface BackendDeploymentPlanInput {
   modelId: string;
   objective?: DeploymentObjective;
   sourceAgent?: string;
+  contextSnippets?: NiaContextSnippet[];
+  stopPolicy?: string;
 }
 
 interface BackendPlanRecord {
@@ -30,13 +35,36 @@ interface BackendPlanRecord {
 }
 
 export async function createBackendDeploymentPlan(input: BackendDeploymentPlanInput): Promise<DeploymentPlan> {
-  const raw = await runLocalBackendBridge(input);
-  return normalizeBackendPlan(raw);
+  if (canUseLocalBackendBridge()) {
+    try {
+      const raw = await runLocalBackendBridge(input);
+      return normalizeBackendPlan(raw);
+    } catch (error) {
+      if (!isMissingPythonBackend(error)) {
+        throw error;
+      }
+    }
+  }
+  return {
+    ...generateServerDeploymentPlan({
+      prompt: input.prompt,
+      modelId: input.modelId,
+      objective: input.objective,
+      stopPolicy: input.stopPolicy,
+      contextSnippets: input.contextSnippets
+    }),
+    backend: {
+      source: "crucible",
+      raw: {
+        source: "typescript-web",
+        reason: "Python backend bridge unavailable in this runtime."
+      }
+    }
+  };
 }
 
-function runLocalBackendBridge(input: BackendDeploymentPlanInput): Promise<BackendPlanRecord> {
+async function runLocalBackendBridge(input: BackendDeploymentPlanInput): Promise<BackendPlanRecord> {
   const cwd = backendCwd();
-  const python = process.env.CRUCIBLE_BACKEND_PYTHON || process.env.PYTHON || "python3";
   const payload = JSON.stringify({
     action: "plan",
     userId: input.userId,
@@ -46,19 +74,31 @@ function runLocalBackendBridge(input: BackendDeploymentPlanInput): Promise<Backe
     objective: input.objective,
     sourceAgent: input.sourceAgent || "web"
   });
+  const errors: string[] = [];
+  for (const python of pythonCommandCandidates()) {
+    try {
+      return await runBackendProcess({ cwd, payload, python });
+    } catch (error) {
+      errors.push(error instanceof Error ? error.message : String(error));
+    }
+  }
+  throw new Error(cleanBackendError(errors.find(Boolean) || "Python backend runtime was not found."));
+}
 
+function runBackendProcess(input: { cwd: string; payload: string; python: string }): Promise<BackendPlanRecord> {
   return new Promise((resolvePromise, reject) => {
-    const child = spawn(python, ["-m", "anygpu.crucible_web_bridge"], {
-      cwd,
+    let settled = false;
+    const child = spawn(input.python, ["-m", "anygpu.crucible_web_bridge"], {
+      cwd: input.cwd,
       env: {
         ...process.env,
-        PYTHONPATH: pythonPath(cwd)
+        PYTHONPATH: pythonPath(input.cwd)
       },
       stdio: ["pipe", "pipe", "pipe"]
     });
     const timeout = setTimeout(() => {
       child.kill("SIGTERM");
-      reject(new Error("Crucible backend planner timed out."));
+      settle(new Error("Crucible backend planner timed out."));
     }, 15000);
     let stdout = "";
     let stderr = "";
@@ -71,22 +111,33 @@ function runLocalBackendBridge(input: BackendDeploymentPlanInput): Promise<Backe
       stderr += chunk;
     });
     child.on("error", (error) => {
-      clearTimeout(timeout);
-      reject(error);
+      settle(error);
     });
     child.on("close", (code) => {
-      clearTimeout(timeout);
       if (code !== 0) {
-        reject(new Error(cleanBackendError(stderr || stdout || `Backend exited with ${code}.`)));
+        settle(new Error(cleanBackendError(stderr || stdout || `Backend exited with ${code}.`)));
         return;
       }
       try {
-        resolvePromise(JSON.parse(stdout) as BackendPlanRecord);
+        settle(null, JSON.parse(stdout) as BackendPlanRecord);
       } catch {
-        reject(new Error("Crucible backend returned invalid JSON."));
+        settle(new Error("Crucible backend returned invalid JSON."));
       }
     });
-    child.stdin.end(payload);
+    child.stdin.end(input.payload);
+
+    function settle(error: Error | null, value?: BackendPlanRecord) {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timeout);
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolvePromise(value as BackendPlanRecord);
+    }
   });
 }
 
@@ -133,9 +184,29 @@ function backendCwd() {
   return candidates.find((candidate) => existsSync(join(candidate, "pyproject.toml"))) || process.cwd();
 }
 
+function canUseLocalBackendBridge() {
+  const cwd = backendCwd();
+  return existsSync(join(cwd, "pyproject.toml")) && existsSync(join(cwd, "anygpu", "crucible_web_bridge.py"));
+}
+
 function pythonPath(cwd: string) {
   const existing = process.env.PYTHONPATH;
   return existing ? `${cwd}:${existing}` : cwd;
+}
+
+function pythonCommandCandidates() {
+  const configured = [process.env.CRUCIBLE_BACKEND_PYTHON, process.env.PYTHON]
+    .map((value) => value?.trim())
+    .filter((value): value is string => Boolean(value));
+  const defaults = [
+    "python3",
+    "/opt/homebrew/bin/python3",
+    "/usr/local/bin/python3",
+    "/usr/bin/python3"
+  ];
+  return Array.from(new Set([...configured, ...defaults])).filter((candidate) => {
+    return candidate.includes("/") ? existsSync(candidate) : true;
+  });
 }
 
 function normalizeObjective(value: unknown): DeploymentObjective {
@@ -154,4 +225,9 @@ function number(value: unknown) {
 
 function cleanBackendError(value: string) {
   return value.replace(/\s+/g, " ").trim() || "Crucible backend request failed.";
+}
+
+function isMissingPythonBackend(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return /ENOENT|Python backend runtime was not found|No module named anygpu|crucible_web_bridge/i.test(message);
 }
