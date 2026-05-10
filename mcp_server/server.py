@@ -66,8 +66,13 @@ def _load_local_dotenv() -> None:
 
 def _prepare_provider_environment() -> None:
     _load_local_dotenv()
-    if "VAST_API_KEY" not in os.environ and "VAST_AI_API_KEY" in os.environ:
-        os.environ["VAST_API_KEY"] = os.environ["VAST_AI_API_KEY"]
+    if "VAST_API_KEY" not in os.environ:
+        for alias in ("VAST_AI_API_KEY", "ANYGPU_VAST_API_KEY"):
+            if os.environ.get(alias):
+                os.environ["VAST_API_KEY"] = os.environ[alias]
+                break
+    if "LAMBDA_CLOUD_API_KEY" not in os.environ and os.environ.get("LAMBDA_API_KEY"):
+        os.environ["LAMBDA_CLOUD_API_KEY"] = os.environ["LAMBDA_API_KEY"]
 
 
 def _tensorlake_adapter():
