@@ -16,6 +16,7 @@ vi.mock("next/navigation", () => ({
 describe("DashboardPage", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllEnvs();
   });
 
   it("shows the protected operational dashboard content without fixture deployments", async () => {
@@ -69,14 +70,39 @@ describe("DashboardPage", () => {
 
     expect(screen.getByText("RL and training runs")).toBeInTheDocument();
     expect(screen.getByText("1 running")).toBeInTheDocument();
-    expect(screen.getByText("line_world_ppo")).toBeInTheDocument();
-    expect(screen.getByText("support_sft")).toBeInTheDocument();
+    expect(screen.getAllByText("line_world_ppo").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("support_sft").length).toBeGreaterThan(0);
     expect(screen.getByText("Modal / Tesla T4")).toBeInTheDocument();
     expect(screen.getByText("success 100%")).toBeInTheDocument();
     expect(screen.getByText("reward 1.20")).toBeInTheDocument();
     expect(screen.getByText("3 rollouts")).toBeInTheDocument();
     expect(screen.getByText("cost $0.0007")).toBeInTheDocument();
     expect(screen.getByText("PPO update 3 passed target success rate.")).toBeInTheDocument();
+  });
+
+  it("includes test runs in deployment history", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("gateway unavailable")));
+    vi.stubEnv("CRUCIBLE_TRAINING_RUNS_JSON", JSON.stringify([
+      {
+        id: "run_smoke_qwen",
+        name: "qwen_smoke_eval",
+        kind: "benchmark",
+        status: "passed",
+        phase: "smoke",
+        provider: "Modal",
+        gpuName: "L4",
+        updatedAt: "2026-05-09T23:00:00Z",
+        latestEvent: "Smoke eval passed before promotion."
+      }
+    ]));
+
+    render(await DashboardPage());
+
+    expect(screen.getByText("Deployment history")).toBeInTheDocument();
+    expect(screen.getByText("1 events")).toBeInTheDocument();
+    expect(screen.getAllByText("qwen_smoke_eval").length).toBeGreaterThan(0);
+    expect(screen.getByText("Test run · Modal / L4 · smoke")).toBeInTheDocument();
+    expect(screen.getAllByText("Passed").length).toBeGreaterThan(0);
   });
 });
 

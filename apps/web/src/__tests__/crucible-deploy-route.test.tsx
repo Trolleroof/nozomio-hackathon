@@ -1,6 +1,41 @@
 import { describe, expect, it, vi } from "vitest";
 
 describe("Crucible deploy route", () => {
+  it("deploys a generated backend plan when the dashboard has no live gateway override", async () => {
+    vi.resetModules();
+    vi.stubEnv("ANYGPU_HOME", `/tmp/crucible-backend-${Date.now()}-${Math.random()}`);
+    vi.stubEnv("CRUCIBLE_DEPLOYMENT_STORE_PATH", `/tmp/crucible-deployments-${Date.now()}-${Math.random()}.json`);
+    vi.stubEnv("INSFORGE_API_BASE_URL", "");
+    vi.stubEnv("ANYGPU_GATEWAY_BASE_URL", "");
+
+    const { POST: planPost } = await import("../../app/api/crucible/plan/route");
+    const planResponse = await planPost(new Request("http://localhost/api/crucible/plan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        modelId: "Qwen/Qwen2.5-7B-Instruct",
+        objective: "cheapest"
+      })
+    }));
+    const plan = await planResponse.json();
+
+    const { POST } = await import("../../app/api/crucible/deploy/route");
+    const response = await POST(new Request("http://localhost/api/crucible/deploy", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ plan })
+    }));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.deployment.planId).toBe(plan.id);
+    expect(body.deployment.status).toBe("ready");
+    expect(body.deployment.endpointUrl).toContain("/v1/chat/completions");
+    expect(body.deployment.logs.some((log: { message: string }) => log.message.includes("Health checks passed"))).toBe(true);
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
   it("creates a deployment from a generated plan when a live gateway is configured", async () => {
     vi.resetModules();
     vi.stubEnv("CRUCIBLE_DEPLOYMENT_STORE_PATH", `/tmp/crucible-deployments-${Date.now()}-${Math.random()}.json`);

@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 import type {
+  Deployment,
   DeploymentObjective,
   DeploymentPlan,
   NiaContextSnippet
@@ -34,6 +35,20 @@ interface BackendPlanRecord {
   source?: unknown;
 }
 
+interface BackendDeploymentRecord {
+  id?: unknown;
+  plan_id?: unknown;
+  status?: unknown;
+  endpoint_url?: unknown;
+  provider?: unknown;
+  runtime?: unknown;
+  health_checks?: unknown;
+  logs?: unknown;
+  benchmark?: unknown;
+  created_at?: unknown;
+  updated_at?: unknown;
+}
+
 export async function createBackendDeploymentPlan(input: BackendDeploymentPlanInput): Promise<DeploymentPlan> {
   if (canUseLocalBackendBridge()) {
     try {
@@ -63,17 +78,26 @@ export async function createBackendDeploymentPlan(input: BackendDeploymentPlanIn
   };
 }
 
-async function runLocalBackendBridge(input: BackendDeploymentPlanInput): Promise<BackendPlanRecord> {
-  const cwd = backendCwd();
-  const payload = JSON.stringify({
-    action: "plan",
-    userId: input.userId,
-    email: input.email,
-    prompt: input.prompt,
-    modelId: input.modelId,
-    objective: input.objective,
-    sourceAgent: input.sourceAgent || "web"
+export async function createBackendDeployment(plan: DeploymentPlan): Promise<Deployment> {
+  assertDeploymentPlan(plan);
+  if (!canUseLocalBackendBridge()) {
+    throw new Error("Crucible backend bridge is unavailable in this runtime.");
+  }
+  const raw = await runLocalBackendBridge({
+    action: "deploy",
+    planId: plan.id
   });
+  return normalizeBackendDeployment(raw, plan);
+}
+
+type BackendBridgeInput = BackendDeploymentPlanInput | {
+  action: "deploy";
+  planId: string;
+};
+
+async function runLocalBackendBridge(input: BackendBridgeInput): Promise<BackendPlanRecord & BackendDeploymentRecord> {
+  const cwd = backendCwd();
+  const payload = JSON.stringify(bridgePayload(input));
   const errors: string[] = [];
   for (const python of pythonCommandCandidates()) {
     try {
@@ -85,7 +109,29 @@ async function runLocalBackendBridge(input: BackendDeploymentPlanInput): Promise
   throw new Error(cleanBackendError(errors.find(Boolean) || "Python backend runtime was not found."));
 }
 
-function runBackendProcess(input: { cwd: string; payload: string; python: string }): Promise<BackendPlanRecord> {
+function bridgePayload(input: BackendBridgeInput) {
+  if (isDeployBridgeInput(input)) {
+    return {
+      action: "deploy",
+      planId: input.planId
+    };
+  }
+  return {
+    action: "plan",
+    userId: input.userId,
+    email: input.email,
+    prompt: input.prompt,
+    modelId: input.modelId,
+    objective: input.objective,
+    sourceAgent: input.sourceAgent || "web"
+  };
+}
+
+function isDeployBridgeInput(input: BackendBridgeInput): input is { action: "deploy"; planId: string } {
+  return "action" in input && input.action === "deploy";
+}
+
+function runBackendProcess(input: { cwd: string; payload: string; python: string }): Promise<BackendPlanRecord & BackendDeploymentRecord> {
   return new Promise((resolvePromise, reject) => {
     let settled = false;
     const child = spawn(input.python, ["-m", "anygpu.crucible_web_bridge"], {
@@ -171,6 +217,102 @@ function normalizeBackendPlan(raw: BackendPlanRecord): DeploymentPlan {
       raw
     }
   };
+}
+
+function normalizeBackendDeployment(raw: BackendDeploymentRecord, plan: DeploymentPlan): Deployment {
+  if (typeof raw?.id !== "string") {
+    throw new Error("Crucible backend did not return a deployment.");
+  }
+  const now = new Date().toISOString();
+  const createdAt = text(raw.created_at) || now;
+  const updatedAt = text(raw.updated_at) || createdAt;
+  return {
+    id: raw.id,
+    planId: text(raw.plan_id) || plan.id,
+    name: plan.modelId,
+    modelId: plan.modelId,
+    provider: text(raw.provider) || plan.recommendation.provider,
+    accelerator: plan.recommendation.accelerator,
+    status: normalizeDeploymentStatus(raw.status),
+    endpointUrl: text(raw.endpoint_url),
+    createdAt,
+    updatedAt,
+    logs: normalizeDeploymentLogs(raw.logs, createdAt),
+    healthChecks: normalizeHealthChecks(raw.health_checks, updatedAt),
+    benchmark: normalizeBenchmark(raw.benchmark),
+    context: [
+      {
+        id: "backend_deployment",
+        source: `crucible://${raw.id}`,
+        title: "Backend deployment",
+        excerpt: plan.recommendation.reason,
+        usedFor: "Launch the approved deployment through the Crucible backend.",
+        searchedAt: updatedAt
+      }
+    ]
+  };
+}
+
+function normalizeDeploymentStatus(value: unknown): Deployment["status"] {
+  return value === "ready" || value === "failed" || value === "stopped" || value === "provisioning"
+    ? value
+    : "ready";
+}
+
+function normalizeDeploymentLogs(value: unknown, fallbackTimestamp: string): Deployment["logs"] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.map((item, index) => {
+    const record = item && typeof item === "object" ? item as Record<string, unknown> : {};
+    const level = record.level === "warn" || record.level === "error" ? record.level : "info";
+    return {
+      id: `log_${index}`,
+      timestamp: text(record.time) || text(record.timestamp) || fallbackTimestamp,
+      level,
+      message: text(record.message) || "Deployment event recorded."
+    };
+  });
+}
+
+function normalizeHealthChecks(value: unknown, fallbackTimestamp: string): Deployment["healthChecks"] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.map((item, index) => {
+    const record = item && typeof item === "object" ? item as Record<string, unknown> : {};
+    return {
+      id: `health_${index}`,
+      name: index === 0 ? "/v1/models" : "/v1/chat/completions",
+      status: record.status === "passing" || record.status === "failing" || record.status === "pending" ? record.status : "passing",
+      checkedAt: text(record.checked_at) || fallbackTimestamp
+    };
+  });
+}
+
+function normalizeBenchmark(value: unknown): Deployment["benchmark"] | undefined {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+  const record = value as Record<string, unknown>;
+  return {
+    id: "backend_benchmark",
+    promptTokens: 0,
+    completionTokens: 0,
+    latencyMs: number(record.p50_latency_ms),
+    tokensPerSecond: number(record.tokens_per_second),
+    recordedAt: new Date().toISOString()
+  };
+}
+
+function assertDeploymentPlan(plan: unknown): asserts plan is DeploymentPlan {
+  if (!plan || typeof plan !== "object" || Array.isArray(plan)) {
+    throw new Error("A generated deployment plan is required.");
+  }
+  const record = plan as Partial<DeploymentPlan>;
+  if (typeof record.id !== "string" || typeof record.modelId !== "string") {
+    throw new Error("A valid generated deployment plan is required.");
+  }
 }
 
 function backendCwd() {
