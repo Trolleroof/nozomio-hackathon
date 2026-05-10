@@ -3,7 +3,6 @@ import type {
   DeploymentPlan,
   NiaContextSnippet
 } from "@crucible/shared/crucible-contract";
-import { generatedPlan } from "@crucible/shared/fixtures";
 
 export interface GenerateDeploymentPlanInput {
   prompt: string;
@@ -13,9 +12,12 @@ export interface GenerateDeploymentPlanInput {
   contextSnippets?: NiaContextSnippet[];
 }
 
+const defaultPrompt = "Deploy a model behind an OpenAI-compatible endpoint.";
+const defaultModelId = "Qwen/Qwen2.5-7B-Instruct";
+
 export function generateServerDeploymentPlan(input: GenerateDeploymentPlanInput): DeploymentPlan {
-  const prompt = cleanText(input.prompt) || generatedPlan.prompt;
-  const modelId = cleanText(input.modelId) || generatedPlan.modelId;
+  const prompt = cleanText(input.prompt) || defaultPrompt;
+  const modelId = cleanText(input.modelId) || defaultModelId;
   const objective = input.objective ?? inferObjective(prompt);
   const recommendation = applyNiaContext(
     recommendPlacement({ prompt, modelId, objective }),
@@ -23,7 +25,6 @@ export function generateServerDeploymentPlan(input: GenerateDeploymentPlanInput)
   );
 
   return {
-    ...generatedPlan,
     id: `plan_${hashStable(`${prompt}:${modelId}:${objective}`).slice(0, 12)}`,
     prompt,
     modelId,

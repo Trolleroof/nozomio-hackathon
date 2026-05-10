@@ -41,6 +41,8 @@ TOOLS: list[JSON] = [
                 "userId": {"type": "string"},
                 "prompt": {"type": "string"},
                 "sourceAgent": {"type": "string"},
+                "modelId": {"type": "string"},
+                "objective": {"type": "string"},
             },
             "required": ["userId", "prompt"],
         },
@@ -485,6 +487,8 @@ def handle_tool_call(store: Any, tool_name: str, arguments: JSON | None = None) 
                 _require(arguments, "userId"),
                 _require(arguments, "prompt"),
                 source=arguments.get("sourceAgent") or "mcp",
+                model_id=arguments.get("modelId"),
+                objective=arguments.get("objective"),
             )
             return _ok(plan)
         if tool_name == "crucible_approve_plan":

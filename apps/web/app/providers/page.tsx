@@ -1,8 +1,10 @@
 import { AppFrame } from "@/components/app-frame";
 import { ProviderMatrix } from "@/components/provider-matrix";
-import { providerCapabilities } from "@crucible/shared/fixtures";
+import { listProviderCapabilities } from "@/lib/crucible-data";
 
-export default function ProvidersPage() {
+export default async function ProvidersPage() {
+  const providerCapabilities = await listProviderCapabilities();
+
   return (
     <AppFrame>
       <div className="mb-8">

@@ -1,30 +1,24 @@
 import { NextResponse } from "next/server";
 
-import { generateServerDeploymentPlan } from "@/lib/crucible-server";
+import { createBackendDeploymentPlan } from "@/lib/crucible-backend";
 import {
   deploymentMemoryIdentity,
   deploymentMemoryInsights,
-  deploymentMemorySnippets,
   listDeploymentMemory,
   recordDeploymentMemory
 } from "@/lib/deployment-memory";
-import { searchNia } from "@/lib/nia-server";
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
     const identity = deploymentMemoryIdentity(request);
     const memory = listDeploymentMemory(identity.userId, identity.sessionId);
-    const nia = await searchNiaForPlan(`${body?.prompt ?? ""} ${body?.modelId ?? ""}`.trim());
-    const plan = generateServerDeploymentPlan({
+    const plan = await createBackendDeploymentPlan({
+      userId: identity.userId,
       prompt: body?.prompt,
       modelId: body?.modelId,
       objective: body?.objective,
-      stopPolicy: body?.stopPolicy,
-      contextSnippets: [
-        ...nia.snippets,
-        ...deploymentMemorySnippets(memory)
-      ]
+      sourceAgent: "web"
     });
     const memoryInsights = deploymentMemoryInsights(memory);
     recordDeploymentMemory({
@@ -48,13 +42,4 @@ export async function POST(request: Request) {
       { status: 400 }
     );
   }
-}
-
-function searchNiaForPlan(query: string) {
-  return Promise.race([
-    searchNia(query),
-    new Promise<Awaited<ReturnType<typeof searchNia>>>((resolve) => {
-      setTimeout(() => resolve({ connected: false, snippets: [] }), 12000);
-    })
-  ]);
 }

@@ -60,4 +60,38 @@ describe("Crucible plan route memory", () => {
     expect(JSON.stringify(body)).not.toContain("private/model");
     vi.unstubAllEnvs();
   });
+
+  it("uses the Python Crucible backend bridge for web plans", async () => {
+    vi.resetModules();
+    vi.stubEnv("CRUCIBLE_AUTH_STORE_PATH", `/tmp/crucible-auth-${Date.now()}-${Math.random()}.json`);
+    vi.stubEnv("CRUCIBLE_MEMORY_STORE_PATH", `/tmp/crucible-memory-${Date.now()}-${Math.random()}.json`);
+    vi.stubEnv("ANYGPU_HOME", `/tmp/crucible-backend-${Date.now()}-${Math.random()}`);
+    vi.stubEnv("NIA_API_KEY", "");
+
+    const { signup } = await import("../lib/server-auth");
+    const { POST } = await import("../../app/api/crucible/plan/route");
+    const current = await signup("backend-web@example.com", "correct horse battery staple");
+
+    const response = await POST(new Request("http://localhost/api/crucible/plan", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: `crucible_session=${current.session.token}`
+      },
+      body: JSON.stringify({
+        prompt: "Deploy Mistral where reliability wins.",
+        modelId: "mistralai/Mistral-7B-Instruct-v0.3",
+        objective: "reliable"
+      })
+    }));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.modelId).toBe("mistralai/Mistral-7B-Instruct-v0.3");
+    expect(body.objective).toBe("reliable");
+    expect(body.backend.source).toBe("crucible");
+    expect(body.backend.raw.source).toBe("web");
+    expect(body.recommendation.reason).toContain("paid launch remains gated by approval");
+    vi.unstubAllEnvs();
+  });
 });

@@ -79,6 +79,57 @@ def test_plan_requires_approval_and_records_agent_context(tmp_path: Path, monkey
     assert "approval" in plan["next_action"].lower()
 
 
+def test_plan_accepts_web_model_and_objective(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("ANYGPU_HOME", str(tmp_path / "state"))
+    store = CrucibleStore()
+    user = signup_user(store, "planner@example.com", "pw")
+
+    plan = create_deployment_plan(
+        store,
+        user["id"],
+        "Deploy Mistral with reliability first.",
+        source="web",
+        model_id="mistralai/Mistral-7B-Instruct-v0.3",
+        objective="reliable",
+    )
+
+    assert plan["source"] == "web"
+    assert plan["model_id"] == "mistralai/Mistral-7B-Instruct-v0.3"
+    assert plan["objective"] == "reliable"
+    assert "mistralai/Mistral-7B-Instruct-v0.3" in plan["context_used"][1]["fact"]
+
+
+def test_web_bridge_creates_backend_plan_for_web_user(tmp_path: Path) -> None:
+    env = os.environ.copy()
+    env["ANYGPU_HOME"] = str(tmp_path / "state")
+    env["PYTHONPATH"] = str(ROOT)
+
+    result = subprocess.run(
+        [sys.executable, "-m", "anygpu.crucible_web_bridge"],
+        cwd=ROOT,
+        env=env,
+        input=json.dumps(
+            {
+                "action": "plan",
+                "userId": "web_user_123",
+                "email": "web@example.com",
+                "prompt": "Deploy Llama 8B reliably.",
+                "modelId": "meta-llama/Meta-Llama-3.1-8B-Instruct",
+                "objective": "reliable",
+            }
+        ),
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+
+    payload = json.loads(result.stdout)
+
+    assert payload["model_id"] == "meta-llama/Meta-Llama-3.1-8B-Instruct"
+    assert payload["objective"] == "reliable"
+    assert payload["user_id"] == "web_user_123"
+
+
 def test_deploy_is_blocked_until_approved_then_records_health_logs_benchmark_stop(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("ANYGPU_HOME", str(tmp_path / "state"))
     store = CrucibleStore()

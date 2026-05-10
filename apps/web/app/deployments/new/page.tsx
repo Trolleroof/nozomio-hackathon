@@ -126,7 +126,7 @@ export default function NewDeploymentPage() {
               >
                 <option value="manual">Manual stop only</option>
                 <option value="idle_30">Stop after 30 idle minutes</option>
-                <option value="demo_window">Stop after judge demo window</option>
+                <option value="demo_window">Stop after test window</option>
               </select>
             </div>
             <button
@@ -135,7 +135,7 @@ export default function NewDeploymentPage() {
               onClick={handleGenerate}
               disabled={isGenerating}
             >
-              <Cpu aria-hidden="true" className="h-4 w-4" />
+              <Cpu aria-hidden="true" className={`h-4 w-4 ${isGenerating ? "animate-pulse" : ""}`} />
               {isGenerating ? "Generating plan" : "Generate plan"}
             </button>
           </div>
@@ -144,8 +144,19 @@ export default function NewDeploymentPage() {
         <section className="crucible-card-muted">
           <h2 className="text-lg font-semibold tracking-tight">Plan preview</h2>
           {isGenerating ? (
-            <div className="mt-4 max-w-md text-sm leading-6 text-muted-foreground">
-              Generating plan with live NIA context and session memory.
+            <div
+              aria-label="Deployment plan generation in progress"
+              className="motion-fade-in mt-4 space-y-4"
+              role="status"
+            >
+              <div className="max-w-md text-sm leading-6 text-muted-foreground">
+                Generating plan with live NIA context and session memory.
+              </div>
+              <div className="space-y-2" aria-hidden="true">
+                <div className="crucible-skeleton-line h-3 w-3/4 rounded bg-surface-raised" />
+                <div className="crucible-skeleton-line h-3 w-1/2 rounded bg-surface-raised" />
+                <div className="crucible-skeleton-line h-3 w-2/3 rounded bg-surface-raised" />
+              </div>
             </div>
           ) : error ? (
             <div className="mt-4 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm leading-6 text-destructive">

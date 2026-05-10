@@ -46,6 +46,27 @@ def test_mcp_plan_deploy_requires_approval_and_then_succeeds(tmp_path: Path, mon
     assert stopped["status"] == "stopped"
 
 
+def test_mcp_plan_accepts_model_and_objective(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("ANYGPU_HOME", str(tmp_path / "state"))
+    store = CrucibleStore()
+    user = signup_user(store, "agent-model@example.com", "pw", role="admin")
+
+    plan = handle_tool_call(
+        store,
+        "crucible_plan_deployment",
+        {
+            "prompt": "Run Mistral where reliability wins.",
+            "sourceAgent": "web",
+            "userId": user["id"],
+            "modelId": "mistralai/Mistral-7B-Instruct-v0.3",
+            "objective": "reliable",
+        },
+    )["content"]
+
+    assert plan["model_id"] == "mistralai/Mistral-7B-Instruct-v0.3"
+    assert plan["objective"] == "reliable"
+
+
 def test_mcp_context_and_failure_tools(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("ANYGPU_HOME", str(tmp_path / "state"))
     store = CrucibleStore()

@@ -2,7 +2,6 @@ import fs from "node:fs";
 import path from "node:path";
 
 import type { NiaContextSnippet } from "@crucible/shared/crucible-contract";
-import { contextSnippets } from "@crucible/shared/fixtures";
 
 const NIA_DEFAULT_BASE_URL = "https://apigcp.trynia.ai/v2";
 
@@ -25,8 +24,8 @@ export async function searchNia(query: string): Promise<NiaSearchResponse> {
   if (!apiKey) {
     return {
       connected: false,
-      error: "Nia is not configured; showing cached context.",
-      snippets: contextSnippets
+      error: "Nia is not configured.",
+      snippets: []
     };
   }
 
@@ -53,8 +52,8 @@ export async function searchNia(query: string): Promise<NiaSearchResponse> {
     if (!response.ok) {
       return {
         connected: true,
-        error: `Nia search failed with HTTP ${response.status}; showing cached context.`,
-        snippets: contextSnippets
+        error: `Nia search failed with HTTP ${response.status}.`,
+        snippets: []
       };
     }
 
@@ -62,13 +61,13 @@ export async function searchNia(query: string): Promise<NiaSearchResponse> {
     const snippets = normalizeNiaSearchResponse(body, query);
     return {
       connected: true,
-      snippets: snippets.length > 0 ? snippets : contextSnippets
+      snippets
     };
   } catch (error) {
     return {
       connected: true,
-      error: `Nia search unavailable (${safeErrorMessage(error)}); showing cached context.`,
-      snippets: contextSnippets
+      error: `Nia search unavailable (${safeErrorMessage(error)}).`,
+      snippets: []
     };
   }
 }
@@ -194,8 +193,11 @@ function safeErrorMessage(error: unknown) {
 }
 
 function getServerEnv(name: string) {
-  if (process.env[name]) {
-    return process.env[name];
+  if (Object.prototype.hasOwnProperty.call(process.env, name)) {
+    return process.env[name]?.trim() || undefined;
+  }
+  if (process.env.NODE_ENV === "test") {
+    return undefined;
   }
 
   for (const envPath of candidateEnvPaths()) {

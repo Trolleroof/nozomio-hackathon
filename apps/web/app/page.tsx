@@ -70,7 +70,7 @@ export default function LandingPage() {
               <ArrowRight aria-hidden="true" className="h-3.5 w-3.5" />
             </Link>
             <Link href="/dashboard" className="crucible-secondary min-h-10 px-4">
-              View demo
+              Open dashboard
             </Link>
           </div>
         </div>
@@ -83,7 +83,7 @@ export default function LandingPage() {
       <section className="border-y border-border bg-muted/40">
         <div className="mx-auto grid max-w-6xl gap-10 px-6 py-16 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
           <div>
-            <p className="crucible-eyebrow">Hackathon demo</p>
+            <p className="crucible-eyebrow">Crucible workflow</p>
             <h2 className="crucible-pixel-wordmark mt-3 max-w-lg text-4xl leading-none sm:text-5xl">
               <span className="crucible-gradient-text">what it</span>
               <span className="text-foreground"> does</span>
@@ -97,7 +97,7 @@ export default function LandingPage() {
               authority.
             </p>
             <p>
-              For the hackathon, the demo centers on deploying a Qwen-style model through
+              The workflow centers on deploying a model through
               the cheapest viable GPU route, showing the recommendation, the approval
               checkpoint, provider status, endpoint health, logs, and the context the
               agent used to make the decision.
@@ -127,7 +127,7 @@ export default function LandingPage() {
       <section className="border-y border-border bg-surface/60">
         <div className="mx-auto grid max-w-6xl gap-10 px-6 py-16 lg:grid-cols-[1fr_0.9fr]">
           <div>
-            <p className="crucible-eyebrow">Demo path</p>
+            <p className="crucible-eyebrow">Deployment path</p>
             <h2 className="mt-3 text-3xl font-semibold tracking-tight">
               From prompt to endpoint, with the risky step gated.
             </h2>
@@ -144,7 +144,7 @@ export default function LandingPage() {
           <div className="crucible-card-muted">
             <div className="flex items-center gap-2">
               <Gauge aria-hidden="true" className="h-4 w-4 text-forge" />
-              <h3 className="text-lg font-semibold tracking-tight">What judges can click through</h3>
+              <h3 className="text-lg font-semibold tracking-tight">What operators can use</h3>
             </div>
             <dl className="mt-5 divide-y divide-border text-sm">
               <div className="grid gap-2 py-3 sm:grid-cols-[8rem_1fr]">

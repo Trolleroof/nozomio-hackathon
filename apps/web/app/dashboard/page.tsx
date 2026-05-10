@@ -3,10 +3,16 @@ import Link from "next/link";
 
 import { AppFrame } from "@/components/app-frame";
 import { EndpointConsole } from "@/components/endpoint-console";
+import { OnboardingLiveDeployment } from "@/components/onboarding-live-deployment";
 import { StatusBadge } from "@/components/status-badge";
-import { contextSnippets, deployments, generatedPlan, providerCapabilities } from "@crucible/shared/fixtures";
+import { listContextSnippets, listDeployments, listProviderCapabilities } from "@/lib/crucible-data";
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  const [deployments, providerCapabilities, contextSnippets] = await Promise.all([
+    listDeployments(),
+    listProviderCapabilities(),
+    listContextSnippets()
+  ]);
   const readyCount = deployments.filter((deployment) => deployment.status === "ready").length;
   const liveProviders = providerCapabilities.filter((provider) => provider.status === "live").length;
 
@@ -25,6 +31,8 @@ export default function DashboardPage() {
         </Link>
       </div>
 
+      <OnboardingLiveDeployment />
+
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_19rem]">
         <div className="space-y-5">
           <section className="crucible-card">
@@ -32,24 +40,30 @@ export default function DashboardPage() {
               <h2 className="text-lg font-semibold tracking-tight">Active deployments</h2>
               <span className="text-sm text-muted-foreground">{readyCount} healthy</span>
             </div>
-            <div className="mt-4 divide-y divide-border">
-              {deployments.slice(0, 4).map((deployment) => (
-                <Link
-                  key={deployment.id}
-                  href={`/deployments/${deployment.id}`}
-                  className="grid gap-2 py-3 text-sm transition-colors hover:text-accent sm:grid-cols-[1fr_7rem_9rem]"
-                >
-                  <span>
-                    <span className="font-medium text-foreground">{deployment.name}</span>
-                    <span className="mt-1 block text-muted-foreground">{deployment.modelId}</span>
-                  </span>
-                  <span className="text-muted-foreground">{deployment.provider}</span>
-                  <span className="sm:justify-self-end">
-                    <StatusBadge status={deployment.status} />
-                  </span>
-                </Link>
-              ))}
-            </div>
+            {deployments.length ? (
+              <div className="mt-4 divide-y divide-border">
+                {deployments.slice(0, 4).map((deployment) => (
+                  <Link
+                    key={deployment.id}
+                    href={`/deployments/${deployment.id}`}
+                    className="grid gap-2 py-3 text-sm transition-colors hover:text-accent sm:grid-cols-[1fr_7rem_9rem]"
+                  >
+                    <span>
+                      <span className="font-medium text-foreground">{deployment.name}</span>
+                      <span className="mt-1 block text-muted-foreground">{deployment.modelId}</span>
+                    </span>
+                    <span className="text-muted-foreground">{deployment.provider}</span>
+                    <span className="sm:justify-self-end">
+                      <StatusBadge status={deployment.status} />
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-4 text-sm leading-6 text-muted-foreground">
+                No live deployments found. Start the AnyGPU gateway or deploy a real model to populate this list.
+              </p>
+            )}
           </section>
 
           <EndpointConsole />
@@ -58,7 +72,9 @@ export default function DashboardPage() {
         <div className="space-y-5">
           <section className="crucible-card">
             <h2 className="text-lg font-semibold tracking-tight">Quick deployment</h2>
-            <p className="mt-2 text-sm leading-6 text-muted-foreground">{generatedPlan.prompt}</p>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              Generate a plan from your own model, objective, and current provider configuration.
+            </p>
             <Link className="crucible-link mt-4 inline-flex items-center gap-1" href="/deployments/new">
               Generate plan <ArrowRight aria-hidden="true" className="h-4 w-4" />
             </Link>
@@ -83,9 +99,13 @@ export default function DashboardPage() {
               <h2 className="text-lg font-semibold tracking-tight">Context used by agent</h2>
             </div>
             <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
-              {contextSnippets.slice(0, 3).map((snippet) => (
-                <li key={snippet.id}>{snippet.title}</li>
-              ))}
+              {contextSnippets.length ? (
+                contextSnippets.slice(0, 3).map((snippet) => (
+                  <li key={snippet.id}>{snippet.title}</li>
+                ))
+              ) : (
+                <li>No live context yet.</li>
+              )}
             </ul>
             <Link className="crucible-link mt-4 inline-flex items-center gap-1" href="/context">
               Open context <ArrowRight aria-hidden="true" className="h-4 w-4" />

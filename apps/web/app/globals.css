@@ -82,12 +82,58 @@ select option {
   50% { opacity: 1; }
 }
 
+@keyframes crucible-fade-lift {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes crucible-dot-pulse {
+  0%, 80%, 100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+
+@keyframes crucible-shimmer {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(100%); }
+}
+
 .flame-a { animation: flicker-a 0.6s steps(1, end) infinite; }
 .flame-b { animation: flicker-b 0.6s steps(1, end) infinite; }
 .ember-pulse { animation: ember-pulse 2.6s ease-in-out infinite; }
+.motion-fade-in { animation: crucible-fade-lift 0.22s ease-out both; }
+.crucible-status-pulse { animation: ember-pulse 1.8s ease-in-out infinite; }
+.crucible-thinking-dot { animation: crucible-dot-pulse 1.2s ease-in-out infinite; }
+.crucible-thinking-dot:nth-child(2) { animation-delay: 0.16s; }
+.crucible-thinking-dot:nth-child(3) { animation-delay: 0.32s; }
+
+.crucible-skeleton-line {
+  position: relative;
+  overflow: hidden;
+}
+
+.crucible-skeleton-line::after {
+  animation: crucible-shimmer 1.4s ease-in-out infinite;
+  background: linear-gradient(90deg, transparent, rgb(var(--foreground) / 0.08), transparent);
+  content: "";
+  inset: 0;
+  position: absolute;
+}
 
 @media (prefers-reduced-motion: reduce) {
-  .flame-a, .flame-b, .ember-pulse { animation: none; }
+  .flame-a, .flame-b, .ember-pulse, .motion-fade-in, .crucible-status-pulse, .crucible-thinking-dot { animation: none; }
+  .crucible-skeleton-line::after { animation: none; }
   .flame-b { opacity: 0; }
 }
 
@@ -101,7 +147,7 @@ select option {
   }
 
   .crucible-sidebar-link {
-    @apply flex min-h-9 items-center gap-2.5 border-l border-transparent px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground;
+    @apply flex min-h-9 items-center gap-2.5 border-l border-transparent px-3 py-1.5 text-sm text-muted-foreground transition-colors duration-150 hover:border-border-strong hover:text-foreground;
   }
 
   .crucible-sidebar-link-active {
@@ -109,15 +155,15 @@ select option {
   }
 
   .crucible-card {
-    @apply rounded-lg border border-border bg-surface p-5 text-foreground;
+    @apply rounded-lg border border-border bg-surface p-5 text-foreground transition-colors duration-200;
   }
 
   .crucible-card-muted {
-    @apply rounded-lg border border-border bg-muted p-5 text-foreground;
+    @apply rounded-lg border border-border bg-muted p-5 text-foreground transition-colors duration-200;
   }
 
   .crucible-card-compact {
-    @apply rounded-md border border-border bg-surface-raised p-4 text-foreground;
+    @apply rounded-md border border-border bg-surface-raised p-4 text-foreground transition-colors duration-200;
   }
 
   .crucible-input {
@@ -129,15 +175,15 @@ select option {
   }
 
   .crucible-primary {
-    @apply inline-flex items-center justify-center rounded-md bg-accent px-4 py-2 text-sm font-medium tracking-tight text-accent-foreground transition-colors hover:bg-accent-hover;
+    @apply inline-flex items-center justify-center rounded-md bg-accent px-4 py-2 text-sm font-medium tracking-tight text-accent-foreground transition duration-150 hover:-translate-y-px hover:bg-accent-hover disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-70;
   }
 
   .crucible-secondary {
-    @apply inline-flex items-center justify-center rounded-md border border-border bg-transparent px-4 py-2 text-sm font-medium text-foreground transition-colors hover:border-border-strong hover:bg-surface-raised;
+    @apply inline-flex items-center justify-center rounded-md border border-border bg-transparent px-4 py-2 text-sm font-medium text-foreground transition duration-150 hover:-translate-y-px hover:border-border-strong hover:bg-surface-raised disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-70;
   }
 
   .crucible-danger {
-    @apply inline-flex items-center justify-center rounded-md border border-ember/40 bg-transparent px-4 py-2 text-sm font-medium text-ember transition-colors hover:bg-ember/10;
+    @apply inline-flex items-center justify-center rounded-md border border-ember/40 bg-transparent px-4 py-2 text-sm font-medium text-ember transition duration-150 hover:-translate-y-px hover:bg-ember/10 disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-70;
   }
 
   .crucible-code {

@@ -1,14 +1,11 @@
 import type {
+  ApiToken,
+  Deployment,
   DeploymentObjective,
-  DeploymentPlan
+  DeploymentPlan,
+  NiaContextSnippet,
+  ProviderCapability
 } from "@crucible/shared/crucible-contract";
-import {
-  apiTokens,
-  contextSnippets,
-  deployments,
-  generatedPlan,
-  providerCapabilities
-} from "@crucible/shared/fixtures";
 
 export interface GenerateDeploymentPlanInput {
   prompt: string;
@@ -18,23 +15,24 @@ export interface GenerateDeploymentPlanInput {
 }
 
 export function listDeployments() {
-  return Promise.resolve(deployments);
+  return Promise.resolve([] satisfies Deployment[]);
 }
 
 export function getDeployment(id: string) {
-  return Promise.resolve(deployments.find((deployment) => deployment.id === id) ?? deployments[0]);
+  void id;
+  return Promise.resolve(null as Deployment | null);
 }
 
 export function listProviderCapabilities() {
-  return Promise.resolve(providerCapabilities);
+  return Promise.resolve([] satisfies ProviderCapability[]);
 }
 
 export function listContextSnippets() {
-  return Promise.resolve(contextSnippets);
+  return Promise.resolve([] satisfies NiaContextSnippet[]);
 }
 
 export function listApiTokens() {
-  return Promise.resolve(apiTokens);
+  return Promise.resolve([] satisfies ApiToken[]);
 }
 
 export function generateDeploymentPlan(input: GenerateDeploymentPlanInput): Promise<DeploymentPlan> {

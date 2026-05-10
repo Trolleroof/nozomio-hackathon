@@ -1,8 +1,10 @@
 import { AgentAccessPanel } from "@/components/agent-access-panel";
 import { AppFrame } from "@/components/app-frame";
-import { apiTokens } from "@crucible/shared/fixtures";
+import { listApiTokens } from "@/lib/crucible-data";
 
 export default function AgentPage() {
+  const apiTokens = listApiTokens();
+
   return (
     <AppFrame>
       <div className="mb-8">

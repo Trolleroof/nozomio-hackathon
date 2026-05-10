@@ -1,6 +1,7 @@
 "use client";
 
 import type { Deployment } from "@crucible/shared/crucible-contract";
+import { LoaderCircle } from "lucide-react";
 import type { FormEvent } from "react";
 import { useState } from "react";
 
@@ -61,14 +62,31 @@ export function PlaygroundPanel({ deployment }: { deployment: Deployment }) {
             value={prompt}
           />
           <button
-            className="crucible-primary min-h-10"
+            className="crucible-primary min-h-10 gap-2"
             disabled={status === "sending"}
             type="submit"
           >
+            {status === "sending" ? <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" /> : null}
             {status === "sending" ? "Sending" : "Send test request"}
           </button>
+          {status === "sending" ? (
+            <div
+              aria-label="Inference in progress"
+              className="motion-fade-in rounded-md border border-border bg-surface-raised p-3 text-sm text-muted-foreground"
+              role="status"
+            >
+              <div className="flex items-center gap-2">
+                <span>Contacting gateway</span>
+                <span className="inline-flex items-center gap-1" aria-hidden="true">
+                  <span className="crucible-thinking-dot h-1.5 w-1.5 rounded-full bg-current" />
+                  <span className="crucible-thinking-dot h-1.5 w-1.5 rounded-full bg-current" />
+                  <span className="crucible-thinking-dot h-1.5 w-1.5 rounded-full bg-current" />
+                </span>
+              </div>
+            </div>
+          ) : null}
           {reply ? (
-            <div className="rounded-md border border-border bg-muted p-3 text-sm leading-6 text-foreground">
+            <div className="motion-fade-in rounded-md border border-border bg-muted p-3 text-sm leading-6 text-foreground">
               {reply}
             </div>
           ) : null}

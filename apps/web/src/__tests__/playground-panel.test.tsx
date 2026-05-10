@@ -40,4 +40,29 @@ describe("PlaygroundPanel", () => {
     expect(await screen.findByText("deployment has no healthy routes")).toBeInTheDocument();
     vi.restoreAllMocks();
   });
+
+  it("shows an animated inference loading state while the gateway is responding", async () => {
+    let resolveResponse!: (response: Response) => void;
+    vi.spyOn(global, "fetch").mockReturnValueOnce(
+      new Promise<Response>((resolve) => {
+        resolveResponse = resolve;
+      })
+    );
+
+    render(<PlaygroundPanel deployment={deployments[0]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Send test request" }));
+
+    expect(await screen.findByRole("status", { name: "Inference in progress" })).toHaveTextContent("Contacting gateway");
+    expect(screen.getByRole("button", { name: "Sending" })).toBeDisabled();
+
+    resolveResponse({
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { content: "Deployment health is passing." } }]
+      })
+    } as Response);
+
+    expect(await screen.findByText("Deployment health is passing.")).toBeInTheDocument();
+    vi.restoreAllMocks();
+  });
 });

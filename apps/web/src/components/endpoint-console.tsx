@@ -1,6 +1,6 @@
 "use client";
 
-import { RefreshCw, SendHorizontal, Server, TerminalSquare } from "lucide-react";
+import { LoaderCircle, RefreshCw, SendHorizontal, Server, TerminalSquare } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
 type GatewayModel = {
@@ -142,7 +142,7 @@ export function EndpointConsole() {
               <h2 className="text-lg font-semibold tracking-tight">Endpoint</h2>
             </div>
             <button className="crucible-secondary min-h-9 gap-2 px-3 text-sm" type="button" onClick={refreshStatus}>
-              <RefreshCw aria-hidden="true" className="h-4 w-4" />
+              <RefreshCw aria-hidden="true" className={`h-4 w-4 ${loadingStatus ? "animate-spin" : ""}`} />
               Refresh
             </button>
           </div>
@@ -152,7 +152,9 @@ export function EndpointConsole() {
               <div className="text-xs text-muted-foreground">Status</div>
               <div className="mt-1 flex items-center gap-2 text-sm font-medium">
                 <span
-                  className={`h-2.5 w-2.5 rounded-full ${gateway.ok ? "bg-emerald-500" : "bg-destructive"}`}
+                  className={`h-2.5 w-2.5 rounded-full ${
+                    loadingStatus ? "crucible-status-pulse bg-forge" : gateway.ok ? "bg-emerald-500" : "bg-destructive"
+                  }`}
                   aria-hidden="true"
                 />
                 {statusText}
@@ -228,7 +230,7 @@ export function EndpointConsole() {
               messages.map((message, index) => (
                 <div
                   key={`${message.role}-${index}`}
-                  className={`max-w-[88%] rounded-md border px-3 py-2 text-sm ${
+                  className={`motion-fade-in max-w-[88%] rounded-md border px-3 py-2 text-sm ${
                     message.role === "user"
                       ? "ml-auto border-accent/35 bg-accent/10"
                       : "border-border bg-surface"
@@ -245,6 +247,23 @@ export function EndpointConsole() {
                 Send a prompt to test the selected OpenAI-compatible model.
               </div>
             )}
+            {sending ? (
+              <div
+                aria-label="Endpoint response pending"
+                className="motion-fade-in max-w-[88%] rounded-md border border-border bg-surface px-3 py-2 text-sm"
+                role="status"
+              >
+                <div className="mb-1 text-xs font-medium text-muted-foreground">Endpoint</div>
+                <div className="flex items-center gap-2 leading-6 text-muted-foreground">
+                  <span>Endpoint is thinking</span>
+                  <span className="inline-flex items-center gap-1" aria-hidden="true">
+                    <span className="crucible-thinking-dot h-1.5 w-1.5 rounded-full bg-current" />
+                    <span className="crucible-thinking-dot h-1.5 w-1.5 rounded-full bg-current" />
+                    <span className="crucible-thinking-dot h-1.5 w-1.5 rounded-full bg-current" />
+                  </span>
+                </div>
+              </div>
+            ) : null}
           </div>
 
           <form className="border-t border-border p-3" onSubmit={sendMessage}>
@@ -257,9 +276,18 @@ export function EndpointConsole() {
                 rows={1}
                 placeholder="Message the endpoint"
               />
-              <button className="crucible-primary h-11 w-11 shrink-0 p-0" type="submit" disabled={sending}>
-                <SendHorizontal aria-hidden="true" className="h-4 w-4" />
-                <span className="sr-only">Send</span>
+              <button
+                aria-label={sending ? "Sending message" : undefined}
+                className="crucible-primary h-11 w-11 shrink-0 p-0"
+                type="submit"
+                disabled={sending}
+              >
+                {sending ? (
+                  <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" />
+                ) : (
+                  <SendHorizontal aria-hidden="true" className="h-4 w-4" />
+                )}
+                <span className="sr-only">{sending ? "Sending message" : "Send"}</span>
               </button>
             </div>
           </form>

@@ -37,6 +37,13 @@ export function StatusBadge({
   children?: React.ReactNode;
 }) {
   const label = children ?? formatStatusLabel(status);
+  const isActive =
+    status === "approved" ||
+    status === "health_checking" ||
+    status === "pending" ||
+    status === "provisioning" ||
+    status === "queued" ||
+    status === "stopping";
 
   return (
     <span
@@ -44,7 +51,7 @@ export function StatusBadge({
         toneByStatus[status] ?? "text-muted-foreground"
       }`}
     >
-      <span aria-hidden="true" className="h-1.5 w-1.5 bg-current" />
+      <span aria-hidden="true" className={`h-1.5 w-1.5 bg-current ${isActive ? "crucible-status-pulse" : ""}`} />
       {label}
     </span>
   );

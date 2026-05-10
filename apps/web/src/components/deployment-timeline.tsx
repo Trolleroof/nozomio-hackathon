@@ -26,9 +26,20 @@ export function DeploymentTimeline({ status }: { status: DeploymentStatus }) {
         return (
           <li
             key={step.status}
-            className={`flex items-center gap-2 ${isCurrent ? "text-accent" : "text-muted-foreground"}`}
+            className={`flex items-center gap-2 transition-colors duration-200 ${
+              isCurrent ? "text-accent" : "text-muted-foreground"
+            }`}
           >
-            <Icon aria-hidden="true" className={`h-4 w-4 ${step.status === "provisioning" && isCurrent ? "animate-spin" : ""}`} />
+            <Icon
+              aria-hidden="true"
+              className={`h-4 w-4 ${
+                step.status === "provisioning" && isCurrent
+                  ? "animate-spin"
+                  : step.status === "health_checking" && isCurrent
+                    ? "crucible-status-pulse"
+                    : ""
+              }`}
+            />
             <span className="text-sm font-medium">{step.label}</span>
           </li>
         );

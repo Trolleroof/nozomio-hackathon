@@ -39,6 +39,47 @@ describe("NewDeploymentPage", () => {
     vi.restoreAllMocks();
   });
 
+  it("shows an animated deployment planning state while generating", async () => {
+    let resolveResponse!: (response: Response) => void;
+    vi.spyOn(global, "fetch").mockReturnValueOnce(
+      new Promise<Response>((resolve) => {
+        resolveResponse = resolve;
+      })
+    );
+
+    render(<NewDeploymentPage />);
+    fireEvent.click(screen.getByRole("button", { name: "Generate plan" }));
+
+    expect(await screen.findByRole("status", { name: "Deployment plan generation in progress" })).toHaveTextContent(
+      "Generating plan"
+    );
+    expect(screen.getByRole("button", { name: "Generating plan" })).toBeDisabled();
+
+    resolveResponse({
+      ok: true,
+      json: async () => ({
+        id: "plan_test",
+        prompt: "Deploy Qwen 7B cheaply. Avoid multi-GPU unless required.",
+        modelId: "Qwen/Qwen2.5-7B-Instruct",
+        objective: "cheapest",
+        recommendation: {
+          provider: "Vast.ai",
+          accelerator: "NVIDIA L4",
+          estimatedHourlyUsd: 0.27,
+          reason: "The request fits a single economical L4-class GPU and keeps paid launch behind explicit approval.",
+          uncertainty: "Final memory fit, exact hourly price, and endpoint readiness depend on live provider capacity."
+        },
+        approvalRequired: true,
+        approvalReason: "Approval required before launching paid GPU resources from a personal agent.",
+        status: "generated",
+        createdAt: "2026-05-09T22:00:00.000Z"
+      })
+    } as Response);
+
+    expect(await screen.findByText("Vast.ai")).toBeInTheDocument();
+    vi.restoreAllMocks();
+  });
+
   it("shows session memory insights when the plan used previous runs", async () => {
     vi.spyOn(global, "fetch").mockResolvedValueOnce({
       ok: true,

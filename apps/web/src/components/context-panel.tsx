@@ -14,7 +14,7 @@ interface ContextPanelProps {
 export function ContextPanel({ niaConnected, snippets }: ContextPanelProps) {
   const [query, setQuery] = useState("Qwen 7B deployment health check");
   const [activeSnippets, setActiveSnippets] = useState(snippets);
-  const [status, setStatus] = useState(niaConnected ? "ready" : "cached");
+  const [status, setStatus] = useState(niaConnected ? "ready" : "idle");
   const [error, setError] = useState<string | null>(null);
   const lastSync = useMemo(() => activeSnippets
     .map((snippet) => snippet.searchedAt)
@@ -53,7 +53,7 @@ export function ContextPanel({ niaConnected, snippets }: ContextPanelProps) {
       <div className="rounded-md border border-forge/40 bg-forge/10 p-4 text-sm text-forge">
         {niaConnected
           ? "Nia is connected. Search live indexed context for deployment decisions."
-          : "Nia is not connected. The app will continue with cached repo context."}
+          : "Nia is not connected. Configure NIA_API_KEY to search indexed context."}
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
@@ -71,12 +71,16 @@ export function ContextPanel({ niaConnected, snippets }: ContextPanelProps) {
             Recent Nia searches
           </div>
           <div className="mt-3 flex flex-wrap gap-2 text-sm">
-            {activeSnippets.map((snippet) => (
-              <span key={snippet.id} className="inline-flex items-center gap-2 text-muted-foreground">
-                <span aria-hidden="true" className="h-1 w-1 bg-accent" />
-                {snippet.usedFor}
-              </span>
-            ))}
+            {activeSnippets.length ? (
+              activeSnippets.map((snippet) => (
+                <span key={snippet.id} className="inline-flex items-center gap-2 text-muted-foreground">
+                  <span aria-hidden="true" className="h-1 w-1 bg-accent" />
+                  {snippet.usedFor}
+                </span>
+              ))
+            ) : (
+              <span className="text-muted-foreground">No live searches yet.</span>
+            )}
           </div>
         </div>
       </div>
@@ -102,13 +106,21 @@ export function ContextPanel({ niaConnected, snippets }: ContextPanelProps) {
       <div>
         <h2 className="text-lg font-semibold tracking-tight">Context snippets used in agent decisions</h2>
         <div className="mt-4 grid gap-4 md:grid-cols-2">
-          {activeSnippets.map((snippet) => (
-            <article key={snippet.id} className="crucible-card">
-              <div className="text-sm font-semibold">{snippet.title}</div>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">{snippet.excerpt}</p>
-              <p className="mt-4 font-mono text-xs text-muted-foreground">{snippet.source}</p>
-            </article>
-          ))}
+          {activeSnippets.length ? (
+            activeSnippets.map((snippet) => (
+              <article key={snippet.id} className="crucible-card">
+                <div className="text-sm font-semibold">{snippet.title}</div>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">{snippet.excerpt}</p>
+                <p className="mt-4 font-mono text-xs text-muted-foreground">{snippet.source}</p>
+              </article>
+            ))
+          ) : (
+            <div className="crucible-card md:col-span-2">
+              <p className="text-sm leading-6 text-muted-foreground">
+                No context snippets yet. Configure NIA_API_KEY or run a search to populate live context.
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </section>

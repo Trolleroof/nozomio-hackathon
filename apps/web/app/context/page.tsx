@@ -1,9 +1,11 @@
 import { AppFrame } from "@/components/app-frame";
 import { ContextPanel } from "@/components/context-panel";
+import { listContextSnippets } from "@/lib/crucible-data";
 import { hasNiaApiKey } from "@/lib/nia-server";
-import { contextSnippets } from "@crucible/shared/fixtures";
 
-export default function ContextPage() {
+export default async function ContextPage() {
+  const contextSnippets = await listContextSnippets();
+
   return (
     <AppFrame>
       <div className="mb-8">

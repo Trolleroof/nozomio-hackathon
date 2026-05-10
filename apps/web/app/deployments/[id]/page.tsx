@@ -6,10 +6,28 @@ import { LogPanel } from "@/components/log-panel";
 import { PlaygroundPanel } from "@/components/playground-panel";
 import { StatusBadge } from "@/components/status-badge";
 import { formatDateTime, formatLatency } from "@/lib/format";
-import { deployments } from "@crucible/shared/fixtures";
+import { getDeployment } from "@/lib/crucible-data";
 
-export default function DeploymentDetailPage() {
-  const deployment = deployments.find((item) => item.id === "dep_qwen_modal") ?? deployments[0];
+export default async function DeploymentDetailPage({
+  params
+}: {
+  params?: Promise<{ id: string }>;
+}) {
+  const resolvedParams = params ? await params : { id: "" };
+  const deployment = await getDeployment(resolvedParams.id);
+
+  if (!deployment) {
+    return (
+      <AppFrame>
+        <div className="crucible-card">
+          <h1 className="text-2xl font-medium tracking-tight">Deployment not found</h1>
+          <p className="mt-3 text-sm leading-6 text-muted-foreground">
+            No real deployment exists for {resolvedParams.id || "this route"}.
+          </p>
+        </div>
+      </AppFrame>
+    );
+  }
 
   return (
     <AppFrame>
@@ -95,7 +113,7 @@ export default function DeploymentDetailPage() {
           <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
             <div>
               <h2 className="text-lg font-semibold tracking-tight">Controls</h2>
-              <p className="mt-1 text-sm text-muted-foreground">Stop is shown for the contract, but fixtures do not call a provider.</p>
+              <p className="mt-1 text-sm text-muted-foreground">Stop requires a connected Crucible backend with provider stop support.</p>
             </div>
             <button
               className="crucible-danger min-h-10 gap-2"

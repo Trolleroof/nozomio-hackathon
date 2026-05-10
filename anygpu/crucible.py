@@ -62,13 +62,16 @@ def create_deployment_plan(
     prompt: str,
     *,
     source: str = "api",
+    model_id: str | None = None,
+    objective: str | None = None,
 ) -> dict[str, Any]:
     user = store.get_user(user_id)
     if user is None:
         raise ValueError(f"Unknown user {user_id}")
 
-    objective = _infer_objective(prompt)
-    provider = "Modal" if objective == "cheapest" else "SkyPilot"
+    resolved_model_id = _clean_model_id(model_id)
+    resolved_objective = _clean_objective(objective) or _infer_objective(prompt)
+    provider = "Modal" if resolved_objective == "cheapest" else "SkyPilot"
     if provider not in {"Modal", "SkyPilot"}:
         provider = "Modal"
     created_at = _now()
@@ -78,8 +81,8 @@ def create_deployment_plan(
         "prompt": prompt,
         "source": source,
         "status": "generated",
-        "model_id": QWEN_7B_MODEL_ID,
-        "objective": objective,
+        "model_id": resolved_model_id,
+        "objective": resolved_objective,
         "approval_required": True,
         "recommendation": {
             "provider": provider,
@@ -89,7 +92,7 @@ def create_deployment_plan(
             "deployment_mode": "simulated-safe",
             "estimated_vram_gb": 16,
             "estimated_cost_usd_per_hour": 0.0,
-            "reason": "Qwen 7B fits on a single economical GPU; paid launch remains gated by approval.",
+            "reason": f"{resolved_model_id} is planned for a single economical GPU first; paid launch remains gated by approval.",
         },
         "context_used": [
             {
@@ -98,7 +101,7 @@ def create_deployment_plan(
             },
             {
                 "source": "model-catalog",
-                "fact": f"{QWEN_7B_MODEL_ID} is treated as the Qwen 7B chat target.",
+                "fact": f"{resolved_model_id} is treated as the requested chat target.",
             },
         ],
         "next_action": "Review the plan and grant approval before any GPU resources are launched.",
@@ -106,6 +109,37 @@ def create_deployment_plan(
         "approved_at": None,
     }
     return store.create_plan(plan)
+
+
+def ensure_backend_user(
+    store: CrucibleStore,
+    user_id: str,
+    *,
+    email: str | None = None,
+    role: str = "user",
+) -> dict[str, Any]:
+    normalized_id = user_id.strip()
+    if not normalized_id:
+        raise ValueError("A user id is required.")
+    existing = store.get_user(normalized_id)
+    if existing is not None:
+        return existing
+    normalized_email = (email or f"{normalized_id}@web.crucible.local").strip().lower()
+    if "@" not in normalized_email:
+        normalized_email = f"{normalized_id}@web.crucible.local"
+    record = {
+        "id": normalized_id,
+        "email": normalized_email,
+        "password_hash": _hash_password(secrets.token_urlsafe(24)),
+        "role": role if role in {"user", "admin"} else "user",
+        "created_at": _now(),
+    }
+    try:
+        return store.create_user(record)
+    except sqlite3.IntegrityError:
+        suffix = secrets.token_hex(4)
+        record["email"] = f"{normalized_id}-{suffix}@web.crucible.local"
+        return store.create_user(record)
 
 
 def approve_plan(store: CrucibleStore, plan_id: str, user_id: str) -> dict[str, Any]:
@@ -438,6 +472,18 @@ def _infer_objective(prompt: str) -> str:
     if any(word in lowered for word in ("cheap", "cheapest", "cost", "budget")):
         return "cheapest"
     return "balanced"
+
+
+def _clean_model_id(model_id: str | None) -> str:
+    cleaned = (model_id or "").strip()
+    return cleaned or QWEN_7B_MODEL_ID
+
+
+def _clean_objective(objective: str | None) -> str | None:
+    cleaned = (objective or "").strip()
+    if cleaned in {"cheapest", "reliable", "low_latency", "balanced"}:
+        return cleaned
+    return None
 
 
 def _hash_password(password: str) -> str:

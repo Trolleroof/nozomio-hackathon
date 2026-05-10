@@ -2,8 +2,21 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { pbkdf2Sync, randomBytes, timingSafeEqual } from "node:crypto";
 import { tmpdir } from "node:os";
+import { createClient } from "@insforge/sdk";
 
 export const sessionCookieName = "crucible_session";
+export const oauthVerifierCookieName = "crucible_oauth_verifier";
+export const insforgeRefreshCookieName = "crucible_insforge_refresh";
+
+export type OAuthProvider = "google" | "github";
+
+export interface AuthConfig {
+  requireEmailVerification: boolean;
+  passwordMinLength: number;
+  verifyEmailMethod: "code" | "link";
+  resetPasswordMethod: "code" | "link";
+  oAuthProviders: OAuthProvider[];
+}
 
 export interface PublicUser {
   id: string;
@@ -45,6 +58,35 @@ function storePath() {
 
 function insforgeBaseUrl() {
   return process.env.INSFORGE_API_BASE_URL?.replace(/\/$/, "");
+}
+
+function insforgeSdkBaseUrl() {
+  return (process.env.NEXT_PUBLIC_INSFORGE_URL || process.env.INSFORGE_API_BASE_URL)?.replace(/\/$/, "");
+}
+
+function insforgeAnonKey() {
+  return process.env.INSFORGE_ANON_KEY || process.env.NEXT_PUBLIC_INSFORGE_ANON_KEY;
+}
+
+function defaultAuthConfig(): AuthConfig {
+  return {
+    requireEmailVerification: false,
+    passwordMinLength: 8,
+    verifyEmailMethod: "code",
+    resetPasswordMethod: "code",
+    oAuthProviders: []
+  };
+}
+
+function normalizeOAuthProviders(value: unknown): OAuthProvider[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter((provider): provider is OAuthProvider => provider === "google" || provider === "github");
+}
+
+function normalizeMethod(value: unknown): "code" | "link" {
+  return value === "link" ? "link" : "code";
 }
 
 function loadStore(): AuthStore {
@@ -108,6 +150,30 @@ export async function login(emailInput: unknown, passwordInput: unknown) {
     return loginWithInsForge(emailInput, passwordInput);
   }
   return loginLocal(emailInput, passwordInput);
+}
+
+export async function getAuthConfig(): Promise<AuthConfig> {
+  const baseUrl = insforgeBaseUrl();
+  if (!baseUrl) {
+    return defaultAuthConfig();
+  }
+  try {
+    const response = await fetch(`${baseUrl}/api/auth/public-config`, { cache: "no-store" });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload || typeof payload !== "object" || Array.isArray(payload)) {
+      return defaultAuthConfig();
+    }
+    const record = payload as Record<string, unknown>;
+    return {
+      requireEmailVerification: record.requireEmailVerification === true,
+      passwordMinLength: typeof record.passwordMinLength === "number" ? record.passwordMinLength : 8,
+      verifyEmailMethod: normalizeMethod(record.verifyEmailMethod),
+      resetPasswordMethod: normalizeMethod(record.resetPasswordMethod),
+      oAuthProviders: normalizeOAuthProviders(record.oAuthProviders)
+    };
+  } catch {
+    return defaultAuthConfig();
+  }
 }
 
 function signupLocal(emailInput: unknown, passwordInput: unknown) {
@@ -209,6 +275,62 @@ async function callInsForgeAuth(path: string, body: { email: string; password: s
       token,
       refreshToken: typeof payload.refreshToken === "string" ? payload.refreshToken : undefined,
       csrfToken: typeof payload.csrfToken === "string" ? payload.csrfToken : undefined,
+      createdAt: new Date().toISOString()
+    } satisfies AuthSession
+  };
+}
+
+export function safeAuthRedirect(value: string | null, fallback = "/dashboard") {
+  if (!value || !value.startsWith("/") || value.startsWith("//")) {
+    return fallback;
+  }
+  return value;
+}
+
+function createInsForgeServerClient() {
+  const baseUrl = insforgeSdkBaseUrl();
+  const anonKey = insforgeAnonKey();
+  if (!baseUrl || !anonKey) {
+    throw new Error("InsForge OAuth requires NEXT_PUBLIC_INSFORGE_URL and INSFORGE_ANON_KEY.");
+  }
+  return createClient({
+    baseUrl,
+    anonKey,
+    isServerMode: true
+  });
+}
+
+export async function startInsForgeOAuth(provider: OAuthProvider, appOrigin: string, nextPath: string) {
+  const config = await getAuthConfig();
+  if (!config.oAuthProviders.includes(provider)) {
+    throw new Error(`${provider} OAuth is not enabled for this InsForge project.`);
+  }
+  const redirectTo = new URL("/api/auth/callback", appOrigin);
+  redirectTo.searchParams.set("next", safeAuthRedirect(nextPath));
+  const { data, error } = await createInsForgeServerClient().auth.signInWithOAuth({
+    provider,
+    redirectTo: redirectTo.toString(),
+    skipBrowserRedirect: true
+  });
+  if (error || !data?.url || !data?.codeVerifier) {
+    throw new Error(error?.message ?? "OAuth init failed.");
+  }
+  return {
+    url: data.url,
+    codeVerifier: data.codeVerifier
+  };
+}
+
+export async function finishInsForgeOAuth(code: string, codeVerifier: string) {
+  const { data, error } = await createInsForgeServerClient().auth.exchangeOAuthCode(code, codeVerifier);
+  if (error || !data?.accessToken) {
+    throw new Error(error?.message ?? "OAuth exchange failed.");
+  }
+  return {
+    user: normalizeInsForgeUser(data.user, ""),
+    session: {
+      token: data.accessToken,
+      refreshToken: typeof data.refreshToken === "string" ? data.refreshToken : undefined,
       createdAt: new Date().toISOString()
     } satisfies AuthSession
   };

@@ -23,6 +23,22 @@ describe("Nia search API route", () => {
     vi.restoreAllMocks();
   });
 
+  it("does not return cached fixture snippets when Nia is unconfigured", async () => {
+    vi.stubEnv("NIA_API_KEY", " ");
+
+    const response = await POST(
+      new Request("http://localhost/api/nia/search", {
+        method: "POST",
+        body: JSON.stringify({ query: "Qwen 7B deployment" })
+      })
+    );
+    const body = await response.json();
+
+    expect(body.connected).toBe(false);
+    expect(body.snippets).toEqual([]);
+    expect(JSON.stringify(body)).not.toContain("Fixture context");
+  });
+
   it("uses the server-side Nia key and normalizes live search results", async () => {
     vi.stubEnv("NIA_API_KEY", "test-nia-token");
     const fetchMock = vi.fn().mockResolvedValue({

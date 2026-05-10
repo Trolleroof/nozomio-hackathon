@@ -29,15 +29,8 @@ export type HealthStatus = "pending" | "passing" | "failing" | "not_run";
 
 export interface ProviderCapability {
   id: string;
-  provider:
-    | "Modal"
-    | "SkyPilot"
-    | "Lambda Cloud"
-    | "Prime Intellect"
-    | "CoreWeave"
-    | "Vast.ai"
-    | "Vultr";
-  adapter: "modal" | "skypilot" | "manual" | "mock";
+  provider: string;
+  adapter: string;
   status: ProviderStatus;
   supportsDeploy: boolean;
   supportsLogs: boolean;
@@ -65,6 +58,10 @@ export interface DeploymentPlan {
   status: "generated" | "needs_clarification" | "error";
   createdAt: string;
   memoryInsights?: string[];
+  backend?: {
+    source: string;
+    raw?: unknown;
+  };
 }
 
 export interface DeploymentLog {

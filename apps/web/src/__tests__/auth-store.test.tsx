@@ -43,4 +43,35 @@ describe("server auth store", () => {
     vi.restoreAllMocks();
     vi.unstubAllEnvs();
   });
+
+  it("loads enabled InsForge OAuth providers from public auth config", async () => {
+    vi.stubEnv("INSFORGE_API_BASE_URL", "https://demo.insforge.app");
+    vi.spyOn(global, "fetch").mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        requireEmailVerification: false,
+        passwordMinLength: 10,
+        verifyEmailMethod: "code",
+        resetPasswordMethod: "link",
+        oAuthProviders: ["google", "github", "unsupported"]
+      })
+    } as Response);
+
+    const { getAuthConfig } = await import("../lib/server-auth");
+    const config = await getAuthConfig();
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      "https://demo.insforge.app/api/auth/public-config",
+      expect.objectContaining({ cache: "no-store" })
+    );
+    expect(config).toEqual({
+      requireEmailVerification: false,
+      passwordMinLength: 10,
+      verifyEmailMethod: "code",
+      resetPasswordMethod: "link",
+      oAuthProviders: ["google", "github"]
+    });
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
+  });
 });
