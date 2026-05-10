@@ -131,10 +131,12 @@ async def _deploy_runpod(offer: GpuOffer, vllm_api_key: str) -> DeployedInstance
             "gpuTypeId": gpu_id,
             "cloudType": "SECURE",
             "gpuCount": offer.gpu_count,
-            "volumeInGb": 50,
-            "containerDiskInGb": 50,
-            "minVcpuCount": 4,
-            "minMemoryInGb": 24,
+            "volumeInGb": 40,
+            "containerDiskInGb": 40,
+            "minVcpuCount": 2,
+            "minMemoryInGb": 15,
+            "name": f"anygpu-{int(time.time())}",
+            "volumeMountPath": "/workspace",
             "ports": f"{VLLM_PORT}/http",
             "imageName": "vllm/vllm-openai:latest",
             "dockerArgs": (
@@ -194,10 +196,13 @@ async def _poll_runpod_endpoint(pod_id: str, vllm_api_key: str, timeout: int = 6
             )
             data = resp.json().get("data", {}).get("pod", {})
             for port_info in (data.get("runtime") or {}).get("ports", []):
-                if port_info.get("privatePort") == VLLM_PORT and port_info.get("isIpPublic"):
-                    ip = port_info["ip"]
-                    public_port = port_info["publicPort"]
-                    url = f"http://{ip}:{public_port}/v1"
+                if port_info.get("privatePort") == VLLM_PORT:
+                    if port_info.get("isIpPublic"):
+                        ip = port_info["ip"]
+                        public_port = port_info["publicPort"]
+                        url = f"http://{ip}:{public_port}/v1"
+                    else:
+                        url = f"https://{pod_id}-{VLLM_PORT}.proxy.runpod.net/v1"
                     if await _wait_for_endpoint(url, api_key=vllm_api_key, timeout=60):
                         return url
         await asyncio.sleep(20)

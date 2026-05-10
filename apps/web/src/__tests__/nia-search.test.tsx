@@ -41,19 +41,31 @@ describe("Nia search API route", () => {
 
   it("uses the server-side Nia key and normalizes live search results", async () => {
     vi.stubEnv("NIA_API_KEY", "test-nia-token");
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => ({
-        sources: [
-          {
-            title: "Live Qwen recipe",
-            source: "nia://repo/recipes/qwen",
-            text: "Use one economical GPU first, then verify OpenAI-compatible health checks."
-          }
-        ]
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ results: [] })
       })
-    });
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ contexts: [] })
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          sources: [
+            {
+              title: "Live Qwen recipe",
+              source: "nia://repo/recipes/qwen",
+              text: "Use one economical GPU first, then verify OpenAI-compatible health checks."
+            }
+          ]
+        })
+      });
     vi.stubGlobal("fetch", fetchMock);
 
     const response = await POST(
@@ -82,6 +94,67 @@ describe("Nia search API route", () => {
       }
     ]);
     expect(JSON.stringify(body)).not.toContain("test-nia-token");
+  });
+
+  it("searches saved Nia contexts before falling back to unified source search", async () => {
+    vi.stubEnv("NIA_API_KEY", "test-nia-token");
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        json: async () => ({ detail: "Vector namespace is not ready." })
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          contexts: [
+            {
+              id: "ctx_123",
+              title: "Crucible provider note",
+              summary: "Prefer a provider with known health checks.",
+              content: "Modal has the managed endpoint path; Vast.ai needs explicit approval before launch.",
+              agent_source: "codex",
+              updated_at: "2026-05-09T22:00:00.000Z"
+            }
+          ],
+          search_query: "provider readiness",
+          total_results: 1
+        })
+      });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await POST(
+      new Request("http://localhost/api/nia/search", {
+        method: "POST",
+        body: JSON.stringify({ query: "provider readiness" })
+      })
+    );
+    const body = await response.json();
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "https://apigcp.trynia.ai/v2/contexts/semantic-search?q=provider+readiness&limit=5&include_highlights=false",
+      expect.objectContaining({ method: "GET" })
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "https://apigcp.trynia.ai/v2/contexts/search?q=provider+readiness&limit=5",
+      expect.objectContaining({ method: "GET" })
+    );
+    expect(body.connected).toBe(true);
+    expect(body.snippets).toEqual([
+      {
+        id: "nia_context_ctx_123",
+        source: "nia://context/ctx_123",
+        title: "Crucible provider note",
+        excerpt: "Modal has the managed endpoint path; Vast.ai needs explicit approval before launch.",
+        usedFor: "Nia context search: provider readiness",
+        searchedAt: expect.any(String)
+      }
+    ]);
   });
 });
 

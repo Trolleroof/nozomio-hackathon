@@ -4,8 +4,11 @@ import { join, resolve } from "node:path";
 
 import type {
   DeploymentObjective,
-  DeploymentPlan
+  DeploymentPlan,
+  NiaContextSnippet
 } from "@crucible/shared/crucible-contract";
+
+import { generateServerDeploymentPlan } from "./crucible-server";
 
 export interface BackendDeploymentPlanInput {
   userId: string;
@@ -14,6 +17,8 @@ export interface BackendDeploymentPlanInput {
   modelId: string;
   objective?: DeploymentObjective;
   sourceAgent?: string;
+  contextSnippets?: NiaContextSnippet[];
+  stopPolicy?: string;
 }
 
 interface BackendPlanRecord {
@@ -30,8 +35,32 @@ interface BackendPlanRecord {
 }
 
 export async function createBackendDeploymentPlan(input: BackendDeploymentPlanInput): Promise<DeploymentPlan> {
-  const raw = await runLocalBackendBridge(input);
-  return normalizeBackendPlan(raw);
+  if (canUseLocalBackendBridge()) {
+    try {
+      const raw = await runLocalBackendBridge(input);
+      return normalizeBackendPlan(raw);
+    } catch (error) {
+      if (!isMissingPythonBackend(error)) {
+        throw error;
+      }
+    }
+  }
+  return {
+    ...generateServerDeploymentPlan({
+      prompt: input.prompt,
+      modelId: input.modelId,
+      objective: input.objective,
+      stopPolicy: input.stopPolicy,
+      contextSnippets: input.contextSnippets
+    }),
+    backend: {
+      source: "crucible",
+      raw: {
+        source: "typescript-web",
+        reason: "Python backend bridge unavailable in this runtime."
+      }
+    }
+  };
 }
 
 async function runLocalBackendBridge(input: BackendDeploymentPlanInput): Promise<BackendPlanRecord> {
@@ -155,6 +184,11 @@ function backendCwd() {
   return candidates.find((candidate) => existsSync(join(candidate, "pyproject.toml"))) || process.cwd();
 }
 
+function canUseLocalBackendBridge() {
+  const cwd = backendCwd();
+  return existsSync(join(cwd, "pyproject.toml")) && existsSync(join(cwd, "anygpu", "crucible_web_bridge.py"));
+}
+
 function pythonPath(cwd: string) {
   const existing = process.env.PYTHONPATH;
   return existing ? `${cwd}:${existing}` : cwd;
@@ -191,4 +225,9 @@ function number(value: unknown) {
 
 function cleanBackendError(value: string) {
   return value.replace(/\s+/g, " ").trim() || "Crucible backend request failed.";
+}
+
+function isMissingPythonBackend(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return /ENOENT|Python backend runtime was not found|No module named anygpu|crucible_web_bridge/i.test(message);
 }

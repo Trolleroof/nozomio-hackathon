@@ -4,9 +4,11 @@ import { createBackendDeploymentPlan } from "@/lib/crucible-backend";
 import {
   deploymentMemoryIdentity,
   deploymentMemoryInsights,
+  deploymentMemorySnippets,
   listDeploymentMemory,
   recordDeploymentMemory
 } from "@/lib/deployment-memory";
+import { hasNiaApiKey, searchNia } from "@/lib/nia-server";
 
 export async function POST(request: Request) {
   try {
@@ -21,12 +23,17 @@ export async function POST(request: Request) {
       objective,
       notes: body?.notes
     });
+    const contextSnippets = [
+      ...deploymentMemorySnippets(memory),
+      ...(await planNiaSnippets(prompt))
+    ];
     const plan = await createBackendDeploymentPlan({
       userId: identity.userId,
       prompt,
       modelId,
       objective,
-      sourceAgent: "web"
+      sourceAgent: "web",
+      contextSnippets
     });
     const memoryInsights = deploymentMemoryInsights(memory);
     recordDeploymentMemory({
@@ -100,6 +107,14 @@ const objectiveLabels: Record<string, string> = {
   reliable: "most reliable",
   low_latency: "lowest latency"
 };
+
+async function planNiaSnippets(prompt: string) {
+  if (!hasNiaApiKey()) {
+    return [];
+  }
+  const response = await searchNia(`Crucible deployment plan provider GPU readiness: ${prompt}`);
+  return response.snippets;
+}
 
 function text(value: unknown) {
   return typeof value === "string" ? value.trim() : "";

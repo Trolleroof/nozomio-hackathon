@@ -11,6 +11,7 @@ import type {
 } from "@crucible/shared/crucible-contract";
 
 import { hasNiaApiKey, searchNia } from "./nia-server";
+import { getStoredDeployment, listStoredDeployments } from "./crucible-deployments";
 
 interface GatewayModel {
   id?: unknown;
@@ -98,12 +99,17 @@ const providerDefinitions: ProviderDefinition[] = [
 export async function listDeployments(): Promise<Deployment[]> {
   const models = await fetchGatewayModels();
   const baseUrl = gatewayBaseUrl();
-  return models
+  const gatewayDeployments = models
     .filter((model) => typeof model.id === "string" && model.id.trim())
     .map((model) => deploymentFromGatewayModel(model, baseUrl));
+  return [...(await listStoredDeployments()), ...gatewayDeployments];
 }
 
 export async function getDeployment(id: string): Promise<Deployment | null> {
+  const stored = await getStoredDeployment(id);
+  if (stored) {
+    return stored;
+  }
   const deployments = await listDeployments();
   return deployments.find((deployment) => deployment.id === id) ?? null;
 }

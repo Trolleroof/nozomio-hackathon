@@ -1,6 +1,5 @@
-import { TerminalSquare } from "lucide-react";
-
 import { AppFrame } from "@/components/app-frame";
+import { DeploymentControls } from "@/components/deployment-controls";
 import { DeploymentTimeline } from "@/components/deployment-timeline";
 import { LogPanel } from "@/components/log-panel";
 import { PlaygroundPanel } from "@/components/playground-panel";
@@ -113,15 +112,9 @@ export default async function DeploymentDetailPage({
           <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
             <div>
               <h2 className="text-lg font-semibold tracking-tight">Controls</h2>
-              <p className="mt-1 text-sm text-muted-foreground">Stop requires a connected Crucible backend with provider stop support.</p>
+              <p className="mt-1 text-sm text-muted-foreground">Stop updates the Crucible deployment record and disables endpoint health checks.</p>
             </div>
-            <button
-              className="crucible-danger min-h-10 gap-2"
-              type="button"
-            >
-              <TerminalSquare aria-hidden="true" className="h-4 w-4" />
-              Stop deployment
-            </button>
+            <DeploymentControls deploymentId={deployment.id} initialStatus={deployment.status} />
           </div>
         </section>
       </div>
