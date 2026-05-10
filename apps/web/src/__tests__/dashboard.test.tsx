@@ -76,8 +76,9 @@ describe("ContextPage", () => {
   it("does not show cached fixture context when Nia is not configured", async () => {
     vi.stubEnv("NIA_API_KEY", "");
     render(await ContextPage());
-    expect(screen.getByText("Indexed sources")).toBeInTheDocument();
-    expect(screen.getByText("Recent Nia searches")).toBeInTheDocument();
+    expect(screen.getByText("Evidence hits")).toBeInTheDocument();
+    expect(screen.getByText("Source coverage")).toBeInTheDocument();
+    expect(screen.getByText("Recent Nia decision checks")).toBeInTheDocument();
     expect(screen.getByText("Context snippets used in agent decisions")).toBeInTheDocument();
     expect(screen.getByText("No context snippets yet. Configure NIA_API_KEY or run a search to populate live context.")).toBeInTheDocument();
     expect(screen.queryByText("SkyPilot docs")).not.toBeInTheDocument();

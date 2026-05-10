@@ -111,11 +111,14 @@ describe("ContextPanel", () => {
 
     render(<ContextPanel niaConnected snippets={snippets} />);
 
-    expect(screen.getByText("Nia is connected. Search live indexed context for deployment decisions.")).toBeInTheDocument();
+    expect(screen.getByText("Nia is connected and grounding deployment decisions in live indexed context.")).toBeInTheDocument();
+    expect(screen.getByText("What Nia proved for this deployment")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Search Nia context"), { target: { value: "provider status" } });
     fireEvent.click(screen.getByRole("button", { name: "Search" }));
 
     await waitFor(() => expect(screen.getByText("Provider notes")).toBeInTheDocument());
+    expect(screen.getAllByText("provider status")).toHaveLength(2);
+    expect(screen.getByText("cited in plan")).toBeInTheDocument();
     expect(screen.queryByText("Fixture context")).not.toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/nia/search",

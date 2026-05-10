@@ -1,7 +1,7 @@
 "use client";
 
 import type { NiaContextSnippet } from "@crucible/shared/crucible-contract";
-import { BookOpenText, Search } from "lucide-react";
+import { BadgeCheck, BookOpenText, BrainCircuit, Network, Search } from "lucide-react";
 import { FormEvent, useMemo, useState } from "react";
 
 import { formatDateTime } from "@/lib/format";
@@ -20,6 +20,8 @@ export function ContextPanel({ niaConnected, snippets }: ContextPanelProps) {
     .map((snippet) => snippet.searchedAt)
     .sort()
     .at(-1), [activeSnippets]);
+  const sourceCount = useMemo(() => new Set(activeSnippets.map((snippet) => sourceHost(snippet.source))).size, [activeSnippets]);
+  const decisionChecks = useMemo(() => uniqueDecisionChecks(activeSnippets), [activeSnippets]);
 
   async function handleSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -51,36 +53,87 @@ export function ContextPanel({ niaConnected, snippets }: ContextPanelProps) {
   return (
     <section className="space-y-6">
       <div className="rounded-md border border-forge/40 bg-forge/10 p-4 text-sm text-forge">
-        {niaConnected
-          ? "Nia is connected. Search live indexed context for deployment decisions."
-          : "Nia is not connected. Configure NIA_API_KEY to search indexed context."}
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="font-medium">
+              {niaConnected
+                ? "Nia is connected and grounding deployment decisions in live indexed context."
+                : "Nia is not connected. Configure NIA_API_KEY to search indexed context."}
+            </p>
+            <p className="mt-1 text-forge/80">
+              Every recommendation cites the source, the decision it changed, and the latest sync time.
+            </p>
+          </div>
+          <span className="inline-flex w-fit items-center gap-2 rounded-md border border-forge/30 bg-background/40 px-3 py-2 font-mono text-xs">
+            <BadgeCheck aria-hidden="true" className="h-4 w-4" />
+            {activeSnippets.length ? `${activeSnippets.length} evidence hits ready` : "waiting for evidence"}
+          </span>
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
         <div className="crucible-card">
           <div className="flex items-center gap-2 text-sm font-medium">
             <BookOpenText aria-hidden="true" className="h-4 w-4 text-forge" />
-            Indexed sources
+            Evidence hits
           </div>
           <p className="mt-3 text-3xl font-semibold">{activeSnippets.length}</p>
           <p className="mt-1 text-sm text-muted-foreground">Last sync {formatDateTime(lastSync)}</p>
         </div>
-        <div className="crucible-card md:col-span-2">
+        <div className="crucible-card">
           <div className="flex items-center gap-2 text-sm font-medium">
-            <Search aria-hidden="true" className="h-4 w-4 text-accent" />
-            Recent Nia searches
+            <Network aria-hidden="true" className="h-4 w-4 text-accent" />
+            Source coverage
           </div>
-          <div className="mt-3 flex flex-wrap gap-2 text-sm">
-            {activeSnippets.length ? (
-              activeSnippets.map((snippet) => (
-                <span key={snippet.id} className="inline-flex items-center gap-2 text-muted-foreground">
-                  <span aria-hidden="true" className="h-1 w-1 bg-accent" />
-                  {snippet.usedFor}
-                </span>
-              ))
-            ) : (
-              <span className="text-muted-foreground">No live searches yet.</span>
-            )}
+          <p className="mt-3 text-3xl font-semibold">{sourceCount}</p>
+          <p className="mt-1 text-sm text-muted-foreground">Distinct repos, docs, or API surfaces checked</p>
+        </div>
+        <div className="crucible-card">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <BrainCircuit aria-hidden="true" className="h-4 w-4 text-ember" />
+            Decisions grounded
+          </div>
+          <p className="mt-3 text-3xl font-semibold">{decisionChecks.length}</p>
+          <p className="mt-1 text-sm text-muted-foreground">Plan choices with cited Nia evidence</p>
+        </div>
+      </div>
+
+      <div className="crucible-card">
+        <div className="flex items-center gap-2 text-sm font-medium">
+          <Search aria-hidden="true" className="h-4 w-4 text-accent" />
+          Recent Nia decision checks
+        </div>
+        <div className="mt-3 grid gap-2 text-sm md:grid-cols-2">
+          {decisionChecks.length ? (
+            decisionChecks.map((check) => (
+              <div key={check} className="rounded-md border border-border bg-surface-raised px-3 py-2 text-muted-foreground">
+                <span className="mr-2 inline-block h-1.5 w-1.5 rounded-full bg-accent align-middle" aria-hidden="true" />
+                {check}
+              </div>
+            ))
+          ) : (
+            <span className="text-muted-foreground">No live searches yet.</span>
+          )}
+        </div>
+      </div>
+
+      <div className="crucible-card-muted">
+        <div className="flex items-center gap-2 text-sm font-medium">
+          <BadgeCheck aria-hidden="true" className="h-4 w-4 text-forge" />
+          What Nia proved for this deployment
+        </div>
+        <div className="mt-3 grid gap-3 text-sm md:grid-cols-3">
+          <div>
+            <p className="font-medium">Endpoint readiness</p>
+            <p className="mt-1 text-muted-foreground">Checks `/health`, `/v1/models`, and chat completion signals before launch.</p>
+          </div>
+          <div>
+            <p className="font-medium">Provider fit</p>
+            <p className="mt-1 text-muted-foreground">Compares live adapter support against dry-run or manually configured providers.</p>
+          </div>
+          <div>
+            <p className="font-medium">Approval risk</p>
+            <p className="mt-1 text-muted-foreground">Keeps paid GPU launch decisions behind cited context and explicit approval.</p>
           </div>
         </div>
       </div>
@@ -109,9 +162,20 @@ export function ContextPanel({ niaConnected, snippets }: ContextPanelProps) {
           {activeSnippets.length ? (
             activeSnippets.map((snippet) => (
               <article key={snippet.id} className="crucible-card">
-                <div className="text-sm font-semibold">{snippet.title}</div>
-                <p className="mt-2 text-sm leading-6 text-muted-foreground">{snippet.excerpt}</p>
-                <p className="mt-4 font-mono text-xs text-muted-foreground">{snippet.source}</p>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <div className="text-sm font-semibold">{snippet.title}</div>
+                    <p className="mt-1 font-mono text-xs text-muted-foreground">{sourceHost(snippet.source)}</p>
+                  </div>
+                  <span className="inline-flex w-fit shrink-0 rounded-md border border-forge/30 bg-forge/10 px-2.5 py-1 text-xs font-medium text-forge">
+                    cited in plan
+                  </span>
+                </div>
+                <p className="mt-3 text-sm leading-6 text-muted-foreground">{snippet.excerpt}</p>
+                <div className="mt-4 rounded-md border border-border bg-surface-raised p-3 text-sm">
+                  <p className="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">Decision impact</p>
+                  <p className="mt-1 text-foreground">{decisionLabel(snippet.usedFor)}</p>
+                </div>
               </article>
             ))
           ) : (
@@ -125,4 +189,16 @@ export function ContextPanel({ niaConnected, snippets }: ContextPanelProps) {
       </div>
     </section>
   );
+}
+
+function sourceHost(source: string) {
+  return source.replace(/^nia:\/\//, "").replace(/^https?:\/\//, "").split(/[/?#]/)[0] || "indexed source";
+}
+
+function decisionLabel(usedFor: string) {
+  return usedFor.replace(/^Nia search:\s*/i, "");
+}
+
+function uniqueDecisionChecks(snippets: NiaContextSnippet[]) {
+  return Array.from(new Set(snippets.map((snippet) => decisionLabel(snippet.usedFor)))).slice(0, 6);
 }
