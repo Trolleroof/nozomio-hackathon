@@ -19,7 +19,7 @@ export function AgentAccessPanel({ token }: { token?: ApiToken }) {
             MCP server
           </div>
           <code className="mt-3 block rounded-md border border-border bg-code px-3 py-2 font-mono text-sm text-foreground">
-            npx crucible-mcp --url {publicUrl}
+            npx -y mcp-remote {publicUrl}
           </code>
         </div>
         <div className="crucible-card">
@@ -45,9 +45,8 @@ export function AgentAccessPanel({ token }: { token?: ApiToken }) {
   "mcpServers": {
     "crucible": {
       "command": "npx",
-      "args": ["crucible-mcp"],
+      "args": ["-y", "mcp-remote", "${publicUrl}"],
       "env": {
-        "CRUCIBLE_MCP_URL": "${publicUrl}",
         "CRUCIBLE_API_TOKEN": "set-this-in-your-agent-env"
       }
     }

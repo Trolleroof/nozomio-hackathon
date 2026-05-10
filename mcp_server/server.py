@@ -33,6 +33,10 @@ from .providers import fetch_lambda, fetch_runpod, fetch_vast, fetch_modal
 from . import deploy as deploy_module
 from . import monitor
 
+from anygpu.crucible import ensure_backend_user
+from anygpu.crucible_mcp import handle_tool_call
+from anygpu.crucible_store import CrucibleStore
+
 
 def _create_mcp() -> FastMCP:
     try:
@@ -47,6 +51,26 @@ mcp = _create_mcp()
 
 # In-memory state — single active deployment per server session
 _active: Optional[DeployedInstance] = None
+
+
+def _crucible_store() -> CrucibleStore:
+    return CrucibleStore()
+
+
+def _agent_user_id(user_id: Optional[str] = None, *, role: str = "admin") -> str:
+    resolved = (user_id or os.environ.get("CRUCIBLE_AGENT_USER_ID") or "agent-admin").strip()
+    ensure_backend_user(
+        _crucible_store(),
+        resolved,
+        email=os.environ.get("CRUCIBLE_AGENT_EMAIL") or f"{resolved}@agents.crucible.local",
+        role=role,
+    )
+    return resolved
+
+
+def _call_crucible_tool(tool_name: str, arguments: dict) -> str:
+    result = handle_tool_call(_crucible_store(), tool_name, arguments)
+    return json.dumps(result, indent=2)
 
 
 def _load_local_dotenv() -> None:
@@ -216,6 +240,110 @@ async def list_gpu_prices(min_vram_gb: int = 16, top_n: int = 10) -> str:
         output["provider_errors"] = errors
 
     return json.dumps(output, indent=2)
+
+
+@mcp.tool()
+def crucible_plan_deployment(
+    prompt: str,
+    userId: Optional[str] = None,
+    sourceAgent: str = "remote-mcp",
+    modelId: Optional[str] = None,
+    objective: Optional[str] = None,
+) -> str:
+    """Create a Crucible deployment plan for an agent workflow.
+
+    userId is optional for hosted agent use; the server creates a stable admin
+    agent identity when it is omitted.
+    """
+    return _call_crucible_tool(
+        "crucible_plan_deployment",
+        {
+            "userId": _agent_user_id(userId),
+            "prompt": prompt,
+            "sourceAgent": sourceAgent,
+            "modelId": modelId,
+            "objective": objective,
+        },
+    )
+
+
+@mcp.tool()
+def crucible_approve_plan(planId: str, userId: Optional[str] = None) -> str:
+    """Record explicit admin approval before launching GPU resources."""
+    return _call_crucible_tool(
+        "crucible_approve_plan",
+        {
+            "planId": planId,
+            "userId": _agent_user_id(userId),
+        },
+    )
+
+
+@mcp.tool()
+def crucible_deploy_approved_plan(planId: str, approvalToken: Optional[str] = None) -> str:
+    """Deploy an approved plan using its approval token."""
+    return _call_crucible_tool(
+        "crucible_deploy_approved_plan",
+        {
+            "planId": planId,
+            "approvalToken": approvalToken,
+        },
+    )
+
+
+@mcp.tool()
+def crucible_get_deployment_status(deploymentId: str) -> str:
+    """Fetch Crucible deployment status and endpoint metadata."""
+    return _call_crucible_tool("crucible_get_deployment_status", {"deploymentId": deploymentId})
+
+
+@mcp.tool()
+def crucible_get_logs(deploymentId: str) -> str:
+    """Fetch Crucible deployment lifecycle logs."""
+    return _call_crucible_tool("crucible_get_logs", {"deploymentId": deploymentId})
+
+
+@mcp.tool()
+def crucible_run_health_check(deploymentId: str) -> str:
+    """Run the stored Crucible deployment health checks."""
+    return _call_crucible_tool("crucible_run_health_check", {"deploymentId": deploymentId})
+
+
+@mcp.tool()
+def crucible_stop_deployment(deploymentId: str) -> str:
+    """Stop a Crucible deployment record and append stop logs."""
+    return _call_crucible_tool("crucible_stop_deployment", {"deploymentId": deploymentId})
+
+
+@mcp.tool()
+def crucible_list_deployments() -> str:
+    """List known Crucible deployments."""
+    return _call_crucible_tool("crucible_list_deployments", {})
+
+
+@mcp.tool()
+def crucible_list_provider_capabilities() -> str:
+    """List provider launch capability and credential status."""
+    _prepare_provider_environment()
+    return _call_crucible_tool("crucible_list_provider_capabilities", {})
+
+
+@mcp.tool()
+def crucible_search_context(query: str) -> str:
+    """Search context snippets used by agent deployment decisions."""
+    return _call_crucible_tool("crucible_search_context", {"query": query})
+
+
+@mcp.tool()
+def crucible_explain_failure(deploymentId: str, error: str) -> str:
+    """Explain a deployment failure with relevant context snippets."""
+    return _call_crucible_tool(
+        "crucible_explain_failure",
+        {
+            "deploymentId": deploymentId,
+            "error": error,
+        },
+    )
 
 
 @mcp.tool()
