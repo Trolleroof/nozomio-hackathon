@@ -130,6 +130,47 @@ def test_web_bridge_creates_backend_plan_for_web_user(tmp_path: Path) -> None:
     assert payload["user_id"] == "web_user_123"
 
 
+def test_web_bridge_deploys_existing_backend_plan(tmp_path: Path) -> None:
+    env = os.environ.copy()
+    env["ANYGPU_HOME"] = str(tmp_path / "state")
+    env["PYTHONPATH"] = str(ROOT)
+
+    plan_result = subprocess.run(
+        [sys.executable, "-m", "anygpu.crucible_web_bridge"],
+        cwd=ROOT,
+        env=env,
+        input=json.dumps(
+            {
+                "action": "plan",
+                "userId": "web_user_123",
+                "prompt": "Deploy Qwen 7B cheaply.",
+                "modelId": "Qwen/Qwen2.5-7B-Instruct",
+                "objective": "cheapest",
+            }
+        ),
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    plan = json.loads(plan_result.stdout)
+
+    deploy_result = subprocess.run(
+        [sys.executable, "-m", "anygpu.crucible_web_bridge"],
+        cwd=ROOT,
+        env=env,
+        input=json.dumps({"action": "deploy", "planId": plan["id"]}),
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    deployment = json.loads(deploy_result.stdout)
+
+    assert deployment["plan_id"] == plan["id"]
+    assert deployment["status"] == "ready"
+    assert deployment["endpoint_url"].endswith("/v1/chat/completions")
+    assert deployment["approval"]["token"].startswith("approval_token_")
+
+
 def test_deploy_is_blocked_until_approved_then_records_health_logs_benchmark_stop(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("ANYGPU_HOME", str(tmp_path / "state"))
     store = CrucibleStore()

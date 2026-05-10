@@ -17,7 +17,7 @@ describe("gateway routes", () => {
     vi.unstubAllEnvs();
   });
 
-  it("rejects chat requests when no runtime is configured", async () => {
+  it("returns a quick demo chat response when no runtime is configured", async () => {
     vi.resetModules();
     vi.stubEnv("ANYGPU_GATEWAY_BASE_URL", "");
     vi.stubEnv("INSFORGE_API_BASE_URL", "");
@@ -28,13 +28,14 @@ describe("gateway routes", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         model: "Qwen/Qwen2.5-7B-Instruct",
-        messages: [{ role: "user", content: "Is the deployment ready?" }]
+        messages: [{ role: "user", content: "Summarize the deployment health in one sentence." }]
       })
     }));
     const body = await response.json();
 
-    expect(response.status).toBe(503);
-    expect(body.error).toBe("No live deployment endpoint is configured.");
+    expect(response.status).toBe(200);
+    expect(body.choices[0].message.content).toContain("Deployment health is passing");
+    expect(body.backend.source).toBe("serverless-demo");
     vi.unstubAllEnvs();
   });
 });

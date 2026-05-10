@@ -2,7 +2,12 @@ import type { ApiToken } from "@crucible/shared/crucible-contract";
 import { Cable, KeyRound, TerminalSquare } from "lucide-react";
 
 export function AgentAccessPanel({ token }: { token?: ApiToken }) {
-  const publicUrl = process.env.NEXT_PUBLIC_CRUCIBLE_MCP_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:8000/mcp";
+  const publicUrl = (
+    process.env.NEXT_PUBLIC_CRUCIBLE_MCP_URL ||
+    process.env.CRUCIBLE_MCP_URL ||
+    process.env.NEXT_PUBLIC_APP_URL ||
+    "http://localhost:8000/mcp"
+  ).replace(/\/$/, "");
   const tokenDisplay = token?.prefix ?? "not configured";
 
   return (
@@ -14,7 +19,7 @@ export function AgentAccessPanel({ token }: { token?: ApiToken }) {
             MCP server
           </div>
           <code className="mt-3 block rounded-md border border-border bg-code px-3 py-2 font-mono text-sm text-foreground">
-            npx crucible-mcp --url {publicUrl}
+            npx -y mcp-remote {publicUrl}
           </code>
         </div>
         <div className="crucible-card">
@@ -40,7 +45,7 @@ export function AgentAccessPanel({ token }: { token?: ApiToken }) {
   "mcpServers": {
     "crucible": {
       "command": "npx",
-      "args": ["crucible-mcp"],
+      "args": ["-y", "mcp-remote", "${publicUrl}"],
       "env": {
         "CRUCIBLE_API_TOKEN": "set-this-in-your-agent-env"
       }

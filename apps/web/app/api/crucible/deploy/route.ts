@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { createBackendDeployment } from "@/lib/crucible-backend";
 import {
   deployPlan,
   deploymentCookieIndexName,
@@ -10,7 +11,9 @@ import {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const deployment = await deployPlan(body?.plan);
+    const deployment = process.env.ANYGPU_GATEWAY_BASE_URL?.trim()
+      ? await deployPlan(body?.plan)
+      : await createBackendDeployment(body?.plan);
     const response = NextResponse.json({ deployment });
     const existingIds = deploymentIdsFromCookie(request.headers.get("cookie") ?? "");
     const deploymentIds = [

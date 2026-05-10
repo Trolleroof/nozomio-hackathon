@@ -1,3 +1,5 @@
+import anyio
+
 from anygpu.state import edit_state
 from anygpu.state import load_state
 from mcp_server.models import DeployedInstance
@@ -58,3 +60,13 @@ def test_mcp_registers_deployment_as_real_gateway_route(tmp_path, monkeypatch) -
     assert route["simulated"] is False
     assert route["runtime_url"] == "http://203.0.113.9:8000"
     assert route["upstream_api_key"] == "upstream-key"
+
+
+def test_hosted_mcp_server_exposes_crucible_agent_tools() -> None:
+    tools = anyio.run(server.mcp.list_tools)
+    tool_names = {tool.name for tool in tools}
+
+    assert "crucible_plan_deployment" in tool_names
+    assert "crucible_approve_plan" in tool_names
+    assert "crucible_deploy_approved_plan" in tool_names
+    assert "crucible_list_provider_capabilities" in tool_names
