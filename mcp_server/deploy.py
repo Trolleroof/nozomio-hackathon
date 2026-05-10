@@ -121,7 +121,7 @@ async def _deploy_runpod(offer: GpuOffer, vllm_api_key: str) -> DeployedInstance
     mutation PodFindAndDeployOnDemand($input: PodFindAndDeployOnDemandInput!) {
       podFindAndDeployOnDemand(input: $input) {
         id
-        machine { podHostId publicIp }
+        machine { podHostId }
         runtime { ports { ip isIpPublic privatePort publicPort type } }
       }
     }
