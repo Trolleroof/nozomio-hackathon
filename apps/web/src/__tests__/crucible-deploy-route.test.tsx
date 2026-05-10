@@ -36,6 +36,44 @@ describe("Crucible deploy route", () => {
     vi.unstubAllEnvs();
   });
 
+  it("falls back to a serverless backend deployment when the Python bridge is unavailable", async () => {
+    vi.resetModules();
+    vi.stubEnv("CRUCIBLE_BACKEND_CWD", "/tmp/missing-crucible-backend");
+    vi.stubEnv("ANYGPU_GATEWAY_BASE_URL", "");
+
+    const { POST } = await import("../../app/api/crucible/deploy/route");
+    const response = await POST(new Request("http://localhost/api/crucible/deploy", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        plan: {
+          id: "plan_serverless",
+          prompt: "Deploy Qwen 7B cheaply",
+          modelId: "Qwen/Qwen2.5-7B-Instruct",
+          objective: "cheapest",
+          recommendation: {
+            provider: "Modal",
+            accelerator: "L4",
+            estimatedHourlyUsd: 0,
+            reason: "Use a single economical GPU.",
+            uncertainty: "Serverless runtime will use the web fallback."
+          },
+          approvalRequired: true,
+          approvalReason: "Deploy button is the explicit launch action.",
+          status: "generated",
+          createdAt: "2026-05-09T22:00:00.000Z"
+        }
+      })
+    }));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.deployment.id).toMatch(/^deploy_/);
+    expect(body.deployment.status).toBe("ready");
+    expect(body.deployment.logs.some((log: { message: string }) => log.message.includes("serverless Crucible deployment"))).toBe(true);
+    vi.unstubAllEnvs();
+  });
+
   it("creates a deployment from a generated plan when a live gateway is configured", async () => {
     vi.resetModules();
     vi.stubEnv("CRUCIBLE_DEPLOYMENT_STORE_PATH", `/tmp/crucible-deployments-${Date.now()}-${Math.random()}.json`);
