@@ -182,6 +182,24 @@ class CrucibleStore:
                     success_rate_delta real,
                     created_at text not null
                 );
+
+                create table if not exists public_mcp_accounts (
+                    caller_id text primary key,
+                    label text,
+                    credit_limit_runs integer not null,
+                    remaining_runs integer not null,
+                    created_at text not null,
+                    updated_at text not null
+                );
+
+                create table if not exists public_mcp_usage_events (
+                    id text primary key,
+                    caller_id text not null references public_mcp_accounts(caller_id),
+                    tool_name text not null,
+                    run_count integer not null,
+                    metadata_json text not null,
+                    created_at text not null
+                );
                 """
             )
 
@@ -366,6 +384,118 @@ class CrucibleStore:
             rows = conn.execute("select record_json from provider_capabilities order by provider").fetchall()
         return [json.loads(row["record_json"]) for row in rows]
 
+    def ensure_public_mcp_account(
+        self,
+        caller_id: str,
+        *,
+        label: str | None = None,
+        credit_limit_runs: int = 5,
+        now: str,
+    ) -> dict[str, Any]:
+        normalized = _normalize_public_caller_id(caller_id)
+        limit = _normalize_run_count(credit_limit_runs, "credit_limit_runs")
+        with self._connect() as conn:
+            conn.execute(
+                """
+                insert into public_mcp_accounts (
+                    caller_id, label, credit_limit_runs, remaining_runs, created_at, updated_at
+                )
+                values (?, ?, ?, ?, ?, ?)
+                on conflict(caller_id) do update set
+                    label = coalesce(excluded.label, public_mcp_accounts.label),
+                    updated_at = public_mcp_accounts.updated_at
+                """,
+                (normalized, label, limit, limit, now, now),
+            )
+        account = self.get_public_mcp_account(normalized)
+        if account is None:
+            raise RuntimeError("Failed to create public MCP account")
+        return account
+
+    def get_public_mcp_account(self, caller_id: str) -> dict[str, Any] | None:
+        normalized = _normalize_public_caller_id(caller_id)
+        with self._connect() as conn:
+            row = conn.execute("select * from public_mcp_accounts where caller_id = ?", (normalized,)).fetchone()
+        return self._public_mcp_account_from_row(row)
+
+    def consume_public_mcp_credit(
+        self,
+        caller_id: str,
+        *,
+        tool_name: str,
+        run_count: int = 1,
+        metadata: dict[str, Any] | None = None,
+        credit_limit_runs: int = 5,
+        now: str,
+        event_id: str,
+    ) -> dict[str, Any]:
+        normalized = _normalize_public_caller_id(caller_id)
+        runs = _normalize_run_count(run_count, "run_count")
+        limit = _normalize_run_count(credit_limit_runs, "credit_limit_runs")
+        if not tool_name.strip():
+            raise ValueError("tool_name is required.")
+        with self._connect() as conn:
+            conn.execute(
+                """
+                insert into public_mcp_accounts (
+                    caller_id, label, credit_limit_runs, remaining_runs, created_at, updated_at
+                )
+                values (?, null, ?, ?, ?, ?)
+                on conflict(caller_id) do nothing
+                """,
+                (normalized, limit, limit, now, now),
+            )
+            row = conn.execute("select * from public_mcp_accounts where caller_id = ?", (normalized,)).fetchone()
+            if row is None:
+                raise RuntimeError("Failed to load public MCP account")
+            account = self._public_mcp_account_from_row(row)
+            if account["remaining_runs"] < runs:
+                raise ValueError("Public MCP credit exhausted. Ask an admin to top up this account.")
+            remaining = account["remaining_runs"] - runs
+            conn.execute(
+                """
+                update public_mcp_accounts
+                set remaining_runs = ?, updated_at = ?
+                where caller_id = ?
+                """,
+                (remaining, now, normalized),
+            )
+            conn.execute(
+                """
+                insert into public_mcp_usage_events (
+                    id, caller_id, tool_name, run_count, metadata_json, created_at
+                )
+                values (?, ?, ?, ?, ?, ?)
+                """,
+                (event_id, normalized, tool_name, runs, json.dumps(metadata or {}, sort_keys=True), now),
+            )
+            updated = conn.execute("select * from public_mcp_accounts where caller_id = ?", (normalized,)).fetchone()
+        updated_account = self._public_mcp_account_from_row(updated)
+        return {
+            "account": updated_account,
+            "event": {
+                "id": event_id,
+                "caller_id": normalized,
+                "tool_name": tool_name,
+                "run_count": runs,
+                "metadata": metadata or {},
+                "created_at": now,
+            },
+        }
+
+    def list_public_mcp_usage(self, caller_id: str) -> list[dict[str, Any]]:
+        normalized = _normalize_public_caller_id(caller_id)
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                select * from public_mcp_usage_events
+                where caller_id = ?
+                order by created_at desc, id desc
+                """,
+                (normalized,),
+            ).fetchall()
+        return [self._public_mcp_usage_from_row(row) for row in rows]
+
     @staticmethod
     def _user_from_row(row: sqlite3.Row | None, *, include_private: bool) -> dict[str, Any] | None:
         if row is None:
@@ -390,3 +520,35 @@ class CrucibleStore:
         deployment["logs"] = json.loads(deployment.pop("logs_json"))
         deployment["benchmark"] = json.loads(deployment.pop("benchmark_json"))
         return deployment
+
+    @staticmethod
+    def _public_mcp_account_from_row(row: sqlite3.Row | None) -> dict[str, Any] | None:
+        if row is None:
+            return None
+        account = dict(row)
+        account["credit_limit_runs"] = int(account["credit_limit_runs"])
+        account["remaining_runs"] = int(account["remaining_runs"])
+        return account
+
+    @staticmethod
+    def _public_mcp_usage_from_row(row: sqlite3.Row) -> dict[str, Any]:
+        event = dict(row)
+        event["run_count"] = int(event["run_count"])
+        event["metadata"] = json.loads(event.pop("metadata_json"))
+        return event
+
+
+def _normalize_public_caller_id(caller_id: str) -> str:
+    normalized = caller_id.strip()
+    if not normalized:
+        raise ValueError("caller_id is required.")
+    if len(normalized) > 128:
+        raise ValueError("caller_id must be 128 characters or fewer.")
+    return normalized
+
+
+def _normalize_run_count(value: int, field_name: str) -> int:
+    count = int(value)
+    if count <= 0:
+        raise ValueError(f"{field_name} must be positive.")
+    return count

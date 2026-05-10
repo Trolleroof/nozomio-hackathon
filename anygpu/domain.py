@@ -2646,7 +2646,17 @@ def record_usage(
     state["cost_events"].append(
         {"time": usage["time"], "deployment": deployment_name, "tokens": total, "cost_usd": cost}
     )
-    deployment["metrics"]["p95_ms"] = max(deployment["metrics"]["p95_ms"], latency_ms)
+    metrics = deployment.setdefault(
+        "metrics",
+        {
+            "p95_ms": 0,
+            "tokens_per_sec": 0.0,
+            "error_rate": 0.0,
+            "queue_depth": 0,
+            "cost_per_1m_tokens": 0.0,
+        },
+    )
+    metrics["p95_ms"] = max(int(metrics.get("p95_ms", 0)), latency_ms)
     return usage
 
 

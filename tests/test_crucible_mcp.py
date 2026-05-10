@@ -105,6 +105,44 @@ def test_mcp_exposes_provider_capabilities_tool(tmp_path: Path, monkeypatch) -> 
     assert {"Modal", "SkyPilot", "Lambda Cloud", "CoreWeave"} <= {item["provider"] for item in response["content"]}
 
 
+def test_public_mcp_credit_starts_with_five_runs_and_exhausts(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("ANYGPU_HOME", str(tmp_path / "state"))
+    monkeypatch.setenv("CRUCIBLE_PUBLIC_MCP_STARTING_CREDITS", "5")
+    store = CrucibleStore()
+
+    names = {tool["name"] for tool in list_tools()}
+    claimed = handle_tool_call(
+        store,
+        "crucible_claim_public_mcp_credit",
+        {"callerId": "install-123", "label": "demo install"},
+    )["content"]
+
+    assert "crucible_claim_public_mcp_credit" in names
+    assert "crucible_consume_public_mcp_credit" in names
+    assert claimed["remaining_runs"] == 5
+    assert claimed["policy"]["secret_exposure"] == "server_only"
+
+    for _ in range(5):
+        consumed = handle_tool_call(
+            store,
+            "crucible_consume_public_mcp_credit",
+            {"callerId": "install-123", "toolName": "deploy_cheapest"},
+        )
+        assert consumed["isError"] is False
+
+    exhausted = handle_tool_call(
+        store,
+        "crucible_consume_public_mcp_credit",
+        {"callerId": "install-123", "toolName": "deploy_cheapest"},
+    )
+    status = handle_tool_call(store, "crucible_public_mcp_credit_status", {"callerId": "install-123"})["content"]
+
+    assert exhausted["isError"] is True
+    assert exhausted["content"]["error"] == "Public MCP credit exhausted. Ask an admin to top up this account."
+    assert status["remaining_runs"] == 0
+    assert len(status["usage_events"]) == 5
+
+
 def test_cli_mcp_call_runs_without_web_or_import_harness(tmp_path: Path) -> None:
     env = os.environ.copy()
     env["ANYGPU_HOME"] = str(tmp_path / "state")

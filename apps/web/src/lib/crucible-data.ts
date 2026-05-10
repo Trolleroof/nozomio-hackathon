@@ -55,7 +55,7 @@ const providerDefinitions: ProviderDefinition[] = [
   {
     provider: "Vast.ai",
     adapter: "vast",
-    env: ["VAST_AI_API_KEY", "VAST_API_KEY"],
+    env: ["VAST_AI_API_KEY", "VAST_API_KEY", "ANYGPU_VAST_API_KEY"],
     supportsOpenAIEndpoint: true,
     notes: "Requires a Vast.ai API key before Crucible can launch marketplace instances."
   },
@@ -113,7 +113,7 @@ export async function listProviderCapabilities(): Promise<ProviderCapability[]> 
   const models = await fetchGatewayModels();
   const activeProviders = new Set(
     models
-      .map((model) => normalizeProvider(String(model.anygpu?.provider ?? "")))
+      .map((model) => normalizeProvider(String(model.anygpu?.provider ?? process.env.ANYGPU_GATEWAY_PROVIDER ?? "")))
       .filter(Boolean)
   );
   const checkedAt = new Date().toISOString();
@@ -190,10 +190,15 @@ async function fetchGatewayModels(): Promise<GatewayModel[]> {
 function deploymentFromGatewayModel(model: GatewayModel, baseUrl: string): Deployment {
   const now = new Date().toISOString();
   const id = String(model.id);
-  const health = typeof model.anygpu?.health === "string" ? model.anygpu.health : "unknown";
-  const provider = readableProvider(model.anygpu?.provider);
-  const runtime = typeof model.anygpu?.runtime === "string" ? model.anygpu.runtime : "unknown";
-  const upstreamUrl = typeof model.anygpu?.upstream_url === "string" ? model.anygpu.upstream_url : undefined;
+  const hasAnyGpuMetadata = Boolean(model.anygpu);
+  const health = typeof model.anygpu?.health === "string" ? model.anygpu.health : "healthy";
+  const provider = readableProvider(model.anygpu?.provider ?? process.env.ANYGPU_GATEWAY_PROVIDER);
+  const runtime = typeof model.anygpu?.runtime === "string"
+    ? model.anygpu.runtime
+    : process.env.ANYGPU_GATEWAY_RUNTIME?.trim() || "OpenAI-compatible";
+  const upstreamUrl = typeof model.anygpu?.upstream_url === "string"
+    ? model.anygpu.upstream_url
+    : process.env.ANYGPU_GATEWAY_BASE_URL?.trim().replace(/\/$/, "");
   const status = deploymentStatusFromHealth(health);
   const healthStatus = healthStatusFromDeploymentStatus(status);
   const simulated = Boolean(model.anygpu?.simulated);
@@ -216,6 +221,7 @@ function deploymentFromGatewayModel(model: GatewayModel, baseUrl: string): Deplo
         now,
         healthStatus === "passing" ? "info" : healthStatus === "failing" ? "error" : "warn",
         `Gateway reported ${id} on ${provider} with ${runtime}; route mode is ${testFixture ? "test fixture" : simulated ? "simulated" : "real runtime"}.`
+          + (hasAnyGpuMetadata ? "" : " Provider metadata was inferred from the configured gateway.")
       )
     ],
     healthChecks: [

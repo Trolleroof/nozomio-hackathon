@@ -155,6 +155,28 @@ describe("DeploymentDetailPage", () => {
     expect(screen.getByText("Playground")).toBeInTheDocument();
     expect(screen.getByText("Stop deployment")).toBeInTheDocument();
   });
+
+  it("treats plain OpenAI-compatible gateway models as ready live deployments", async () => {
+    vi.stubEnv("ANYGPU_GATEWAY_BASE_URL", "https://pod.example/v1");
+    vi.stubEnv("ANYGPU_GATEWAY_PROVIDER", "RunPod");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        data: [
+          {
+            id: "qwen"
+          }
+        ]
+      })
+    }));
+
+    render(await DashboardPage());
+    expect(screen.getAllByText("qwen").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("RunPod").length).toBeGreaterThan(0);
+    expect(screen.getByText("1 healthy")).toBeInTheDocument();
+    expect(screen.getByText("https://pod.example/v1")).toBeInTheDocument();
+  });
 });
 
 describe("ContextPage", () => {

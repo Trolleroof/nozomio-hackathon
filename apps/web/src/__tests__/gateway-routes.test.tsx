@@ -17,6 +17,33 @@ describe("gateway routes", () => {
     vi.unstubAllEnvs();
   });
 
+  it("proxies model requests with gateway auth and dashboard user agent", async () => {
+    vi.resetModules();
+    vi.stubEnv("ANYGPU_GATEWAY_BASE_URL", "https://gateway.example/v1");
+    vi.stubEnv("ANYGPU_GATEWAY_API_KEY", "gateway-key");
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ data: [{ id: "qwen" }] })
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { GET } = await import("../../app/api/gateway/models/route");
+    const response = await GET();
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.models).toEqual([{ id: "qwen" }]);
+    expect(fetchMock).toHaveBeenCalledWith("https://gateway.example/v1/models", expect.objectContaining({
+      headers: {
+        Authorization: "Bearer gateway-key",
+        "User-Agent": "Crucible-Dashboard/0.1"
+      }
+    }));
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
   it("rejects chat requests when no runtime is configured", async () => {
     vi.resetModules();
     vi.stubEnv("ANYGPU_GATEWAY_BASE_URL", "");

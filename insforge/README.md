@@ -69,3 +69,8 @@ crucible_recommend_next_gpu_run
 ```
 
 These tools are intentionally policy-level. They create durable records and enforce approvals; they do not directly launch paid GPU infrastructure by themselves.
+
+The migration also includes a `public_mcp_accounts` and `public_mcp_usage_events`
+ledger for public MCP deployments. The MCP service should call
+`claim_public_mcp_credit` for a new caller and `consume_public_mcp_credit` before
+spendable work, while provider keys remain server-side secrets.

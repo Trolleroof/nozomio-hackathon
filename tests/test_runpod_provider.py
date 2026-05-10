@@ -37,6 +37,23 @@ class FakeAsyncClient:
         return FakeResponse(self.payload)
 
 
+class SequenceAsyncClient:
+    def __init__(self, payloads: list[dict[str, Any]]) -> None:
+        self.payloads = payloads
+        self.posts: list[dict[str, Any]] = []
+
+    async def __aenter__(self) -> "SequenceAsyncClient":
+        return self
+
+    async def __aexit__(self, *_args: Any) -> None:
+        return None
+
+    async def post(self, url: str, **kwargs: Any) -> FakeResponse:
+        self.posts.append({"url": url, **kwargs})
+        payload = self.payloads.pop(0)
+        return FakeResponse(payload)
+
+
 def test_launch_omits_bid_price_for_on_demand_mutation(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RUNPOD_API_KEY", "test-token")
     client = FakeAsyncClient({"data": {"podFindAndDeployOnDemand": {"id": "pod_123", "imageName": "runpod/pytorch"}}})
@@ -152,6 +169,40 @@ def test_deploy_runpod_surfaces_graphql_launch_errors(monkeypatch: pytest.Monkey
         asyncio.run(deploy_module._deploy_runpod(offer, "test-vllm-key"))
 
 
+def test_poll_runpod_endpoint_tolerates_transient_null_pod(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RUNPOD_API_KEY", "test-token")
+    client = SequenceAsyncClient([
+        {"data": {"pod": None}},
+        {
+            "data": {
+                "pod": {
+                    "id": "pod_123",
+                    "runtime": {
+                        "ports": [
+                            {
+                                "privatePort": 8000,
+                                "isIpPublic": False,
+                            }
+                        ]
+                    },
+                }
+            }
+        },
+    ])
+    monkeypatch.setattr("httpx.AsyncClient", lambda: client)
+    monkeypatch.setattr(deploy_module, "_wait_for_endpoint", _endpoint_ready)
+
+    async def no_sleep(_seconds: float) -> None:
+        return None
+
+    monkeypatch.setattr(asyncio, "sleep", no_sleep)
+
+    endpoint = asyncio.run(deploy_module._poll_runpod_endpoint("pod_123", "test-vllm-key", timeout=30))
+
+    assert endpoint == "https://pod_123-8000.proxy.runpod.net/v1"
+    assert len(client.posts) == 2
+
+
 def test_launch_raises_graphql_errors(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("RUNPOD_API_KEY", "test-token")
     client = FakeAsyncClient({"errors": [{"message": "Field bidPerGpu is not defined"}]})
@@ -173,6 +224,10 @@ def test_launch_raises_graphql_errors(monkeypatch: pytest.MonkeyPatch) -> None:
 
 async def _fake_poll_runpod_endpoint(_pod_id: str, _vllm_api_key: str, timeout: int = 600) -> str:
     return "http://127.0.0.1:8000/v1"
+
+
+async def _endpoint_ready(_url: str, api_key: str | None = None, timeout: int = 600) -> bool:
+    return True
 
 
 def test_modal_credentials_can_load_from_local_modal_config(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -72,6 +72,35 @@ def _prepare_provider_environment() -> None:
         os.environ["VAST_API_KEY"] = os.environ["VAST_AI_API_KEY"]
 
 
+def _maybe_consume_public_credit(
+    tool_name: str,
+    public_user_id: Optional[str],
+    *,
+    metadata: Optional[dict] = None,
+) -> Optional[dict]:
+    public_access = importlib.import_module("anygpu.public_mcp_access")
+    if not (public_user_id or public_access.public_credit_required()):
+        return None
+    if not public_user_id:
+        raise RuntimeError("public_user_id is required for this public MCP server.")
+    store_module = importlib.import_module("anygpu.crucible_store")
+    return public_access.consume_public_mcp_credit(
+        store_module.CrucibleStore(),
+        caller_id=public_user_id,
+        tool_name=tool_name,
+        metadata=metadata or {},
+    )
+
+
+def _safe_gateway_response(gateway: dict) -> dict:
+    safe = dict(gateway)
+    safe.pop("upstream_url", None)
+    safe.pop("api_key", None)
+    safe.pop("upstream_api_key", None)
+    safe["authentication"] = "handled_by_server_proxy"
+    return safe
+
+
 def _tensorlake_adapter():
     _load_local_dotenv()
     return importlib.import_module("anygpu.tensorlake_sandbox")
@@ -259,7 +288,11 @@ async def check_availability(provider: Optional[str] = None, min_vram_gb: int = 
 
 
 @mcp.tool()
-async def deploy_cheapest(min_vram_gb: int = 16, provider: Optional[str] = None) -> str:
+async def deploy_cheapest(
+    min_vram_gb: int = 16,
+    provider: Optional[str] = None,
+    public_user_id: Optional[str] = None,
+) -> str:
     """Provision the cheapest available GPU and start vLLM serving Qwen 2.5-7B.
 
     Blocks until the OpenAI-compatible endpoint is healthy (up to ~10 minutes).
@@ -267,6 +300,7 @@ async def deploy_cheapest(min_vram_gb: int = 16, provider: Optional[str] = None)
     Args:
         min_vram_gb: Minimum VRAM (default 16 GB).
         provider: Force a specific provider. Omit to auto-select cheapest.
+        public_user_id: Public MCP caller identifier used for run-credit accounting.
     """
     global _active
     if _active is not None:
@@ -290,21 +324,32 @@ async def deploy_cheapest(min_vram_gb: int = 16, provider: Optional[str] = None)
 
     filtered.sort(key=lambda o: o.price_per_hr)
     best = filtered[0]
+    public_credit = _maybe_consume_public_credit(
+        "deploy_cheapest",
+        public_user_id,
+        metadata={
+            "provider": best.provider,
+            "gpu_type": best.gpu_type,
+            "price_per_hr": best.price_per_hr,
+            "min_vram_gb": min_vram_gb,
+        },
+    )
 
     instance = await deploy_module.deploy(best)
     _active = instance
     gateway = _register_anygpu_gateway_route(instance)
 
-    return json.dumps({
+    output = {
         "status": "deployed",
         "provider": instance.provider,
         "instance_id": instance.instance_id,
         "gpu_type": instance.gpu_type,
         "price_per_hr": instance.price_per_hr,
-        "gateway": gateway,
-        "upstream_endpoint_url": instance.endpoint_url,
-        "api_key": instance.api_key,
-    }, indent=2)
+        "gateway": _safe_gateway_response(gateway),
+    }
+    if public_credit is not None:
+        output["public_credit"] = public_credit["account"]
+    return json.dumps(output, indent=2)
 
 
 @mcp.tool()
@@ -312,13 +357,13 @@ async def get_endpoint() -> str:
     """Return the OpenAI-compatible AnyGPU gateway base URL and model."""
     endpoint = _anygpu_gateway_endpoint()
     if endpoint is not None:
-        return json.dumps(endpoint, indent=2)
+        return json.dumps(_safe_gateway_response(endpoint), indent=2)
     if _active is None:
         return json.dumps({"error": "No active deployment. Call deploy_cheapest() first."})
     return json.dumps({
-        "base_url": _active.endpoint_url,
-        "api_key": _active.api_key,
+        "base_url": "http://127.0.0.1:8765/v1",
         "model": "qwen",
+        "authentication": "handled_by_server_proxy",
     }, indent=2)
 
 
@@ -342,6 +387,20 @@ async def teardown() -> str:
     _active = None
 
     return json.dumps({"status": "terminated", "final_spend": spend}, indent=2)
+
+
+def claim_public_credit(public_user_id: str, label: Optional[str] = None) -> str:
+    """Create or return a public MCP credit account with the starter run allowance."""
+    public_access = importlib.import_module("anygpu.public_mcp_access")
+    store_module = importlib.import_module("anygpu.crucible_store")
+    return json.dumps(
+        public_access.claim_public_mcp_credit(
+            store_module.CrucibleStore(),
+            caller_id=public_user_id,
+            label=label,
+        ),
+        indent=2,
+    )
 
 
 @mcp.tool()
@@ -625,6 +684,17 @@ def crucible_recommend_next_gpu_run(
 
 
 @mcp.tool()
+def get_public_credit_status(public_user_id: str) -> str:
+    """Return remaining public MCP credits for a caller."""
+    public_access = importlib.import_module("anygpu.public_mcp_access")
+    store_module = importlib.import_module("anygpu.crucible_store")
+    return json.dumps(
+        public_access.public_mcp_credit_status(store_module.CrucibleStore(), caller_id=public_user_id),
+        indent=2,
+    )
+
+
+@mcp.tool()
 def create_tensorlake_sandbox(
     image: str = "tensorlake/ubuntu-minimal",
     cpus: float = 1.0,
@@ -632,17 +702,26 @@ def create_tensorlake_sandbox(
     disk_mb: int = 10240,
     timeout_secs: int = 300,
     name: Optional[str] = None,
+    public_user_id: Optional[str] = None,
 ) -> str:
     """Create a Tensorlake MicroVM sandbox for isolated agent tool execution."""
+    public_credit = _maybe_consume_public_credit(
+        "create_tensorlake_sandbox",
+        public_user_id,
+        metadata={"image": image, "cpus": cpus, "memory_mb": memory_mb, "disk_mb": disk_mb},
+    )
+    result = _tensorlake_adapter().create_sandbox(
+        image=image,
+        cpus=cpus,
+        memory_mb=memory_mb,
+        disk_mb=disk_mb,
+        timeout_secs=timeout_secs,
+        name=name,
+    )
+    if public_credit is not None:
+        result["public_credit"] = public_credit["account"]
     return json.dumps(
-        _tensorlake_adapter().create_sandbox(
-            image=image,
-            cpus=cpus,
-            memory_mb=memory_mb,
-            disk_mb=disk_mb,
-            timeout_secs=timeout_secs,
-            name=name,
-        ),
+        result,
         indent=2,
     )
 
@@ -691,17 +770,26 @@ def create_vcpu_host(
     memory_mb: int = 2048,
     disk_mb: int = 10240,
     timeout_secs: int = 3600,
+    public_user_id: Optional[str] = None,
 ) -> str:
     """Create a Tensorlake vCPU MicroVM for autonomous agent work or site hosting."""
+    public_credit = _maybe_consume_public_credit(
+        "create_vcpu_host",
+        public_user_id,
+        metadata={"name": name, "image": image, "cpus": cpus, "memory_mb": memory_mb, "disk_mb": disk_mb},
+    )
+    result = _tensorlake_adapter().create_vcpu_host(
+        name=name,
+        image=image,
+        cpus=cpus,
+        memory_mb=memory_mb,
+        disk_mb=disk_mb,
+        timeout_secs=timeout_secs,
+    )
+    if public_credit is not None:
+        result["public_credit"] = public_credit["account"]
     return json.dumps(
-        _tensorlake_adapter().create_vcpu_host(
-            name=name,
-            image=image,
-            cpus=cpus,
-            memory_mb=memory_mb,
-            disk_mb=disk_mb,
-            timeout_secs=timeout_secs,
-        ),
+        result,
         indent=2,
     )
 

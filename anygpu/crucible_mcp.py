@@ -30,6 +30,11 @@ from .insforge_compute import (
     record_training_event,
     request_gpu_run,
 )
+from .public_mcp_access import (
+    claim_public_mcp_credit,
+    consume_public_mcp_credit,
+    public_mcp_credit_status,
+)
 
 
 JSON = dict[str, Any]
@@ -298,6 +303,41 @@ TOOLS: list[JSON] = [
         "name": "crucible_list_execution_features",
         "description": "Return the MCP execution matrix for RL environments, Modal smoke runs, and model deployments.",
         "inputSchema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "crucible_claim_public_mcp_credit",
+        "description": "Create or return a public MCP credit account. New callers receive the configured starter allowance.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "callerId": {"type": "string"},
+                "label": {"type": "string"},
+            },
+            "required": ["callerId"],
+        },
+    },
+    {
+        "name": "crucible_public_mcp_credit_status",
+        "description": "Return remaining public MCP run credits and usage events for a caller.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"callerId": {"type": "string"}},
+            "required": ["callerId"],
+        },
+    },
+    {
+        "name": "crucible_consume_public_mcp_credit",
+        "description": "Reserve public MCP run credit before spendable server-side work. Secrets stay server-only.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "callerId": {"type": "string"},
+                "toolName": {"type": "string"},
+                "runCount": {"type": "integer"},
+                "metadata": {"type": "object"},
+            },
+            "required": ["callerId", "toolName"],
+        },
     },
     {
         "name": "crucible_create_tensorlake_sandbox",
@@ -660,6 +700,26 @@ def handle_tool_call(store: Any, tool_name: str, arguments: JSON | None = None) 
             )
         if tool_name == "crucible_list_execution_features":
             return _ok(_execution_features())
+        if tool_name == "crucible_claim_public_mcp_credit":
+            return _ok(
+                claim_public_mcp_credit(
+                    store,
+                    caller_id=_require(arguments, "callerId"),
+                    label=arguments.get("label"),
+                )
+            )
+        if tool_name == "crucible_public_mcp_credit_status":
+            return _ok(public_mcp_credit_status(store, caller_id=_require(arguments, "callerId")))
+        if tool_name == "crucible_consume_public_mcp_credit":
+            return _ok(
+                consume_public_mcp_credit(
+                    store,
+                    caller_id=_require(arguments, "callerId"),
+                    tool_name=_require(arguments, "toolName"),
+                    run_count=int(arguments.get("runCount", 1)),
+                    metadata=arguments.get("metadata") or {},
+                )
+            )
         if tool_name == "crucible_create_tensorlake_sandbox":
             adapter = _tensorlake_adapter()
             create_args: dict[str, Any] = {}

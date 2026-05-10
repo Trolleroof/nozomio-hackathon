@@ -262,3 +262,112 @@ as $$
   order by coalesce(a.cost_usd, 999999.0) asc, coalesce(a.success_rate_delta, 0) desc, a.created_at desc
   limit 1;
 $$;
+
+-- Public MCP credit ledger. Paid provider/API keys remain server-only; public
+-- callers receive a small run allowance that the MCP service consumes before
+-- spendable work.
+create table if not exists public.public_mcp_accounts (
+  caller_id text primary key,
+  label text,
+  credit_limit_runs integer not null default 5 check (credit_limit_runs > 0),
+  remaining_runs integer not null default 5 check (remaining_runs >= 0),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.public_mcp_usage_events (
+  id text primary key,
+  caller_id text not null references public.public_mcp_accounts(caller_id),
+  tool_name text not null,
+  run_count integer not null check (run_count > 0),
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+alter table public.public_mcp_accounts enable row level security;
+alter table public.public_mcp_usage_events enable row level security;
+
+create index if not exists public_mcp_usage_events_caller_created_idx
+  on public.public_mcp_usage_events (caller_id, created_at desc);
+
+create or replace function public.claim_public_mcp_credit(
+  caller_id text,
+  label text default null,
+  credit_limit_runs integer default 5
+) returns public.public_mcp_accounts
+language plpgsql
+security definer
+as $$
+declare
+  account public.public_mcp_accounts;
+begin
+  if caller_id is null or length(trim(caller_id)) = 0 then
+    raise exception 'caller_id is required';
+  end if;
+  if credit_limit_runs <= 0 then
+    raise exception 'credit_limit_runs must be positive';
+  end if;
+
+  insert into public.public_mcp_accounts (
+    caller_id, label, credit_limit_runs, remaining_runs
+  )
+  values (
+    trim(caller_id), label, credit_limit_runs, credit_limit_runs
+  )
+  on conflict (caller_id) do update set
+    label = coalesce(excluded.label, public.public_mcp_accounts.label)
+  returning * into account;
+
+  return account;
+end;
+$$;
+
+create or replace function public.consume_public_mcp_credit(
+  event_id text,
+  caller_id text,
+  tool_name text,
+  run_count integer default 1,
+  metadata jsonb default '{}'::jsonb,
+  credit_limit_runs integer default 5
+) returns public.public_mcp_accounts
+language plpgsql
+security definer
+as $$
+declare
+  account public.public_mcp_accounts;
+begin
+  account := public.claim_public_mcp_credit(caller_id, null, credit_limit_runs);
+
+  if event_id is null or length(trim(event_id)) = 0 then
+    raise exception 'event_id is required';
+  end if;
+  if tool_name is null or length(trim(tool_name)) = 0 then
+    raise exception 'tool_name is required';
+  end if;
+  if run_count <= 0 then
+    raise exception 'run_count must be positive';
+  end if;
+  if account.remaining_runs < run_count then
+    raise exception 'Public MCP credit exhausted';
+  end if;
+
+  update public.public_mcp_accounts
+  set remaining_runs = remaining_runs - run_count,
+      updated_at = now()
+  where public_mcp_accounts.caller_id = trim(consume_public_mcp_credit.caller_id)
+  returning * into account;
+
+  insert into public.public_mcp_usage_events (
+    id, caller_id, tool_name, run_count, metadata
+  )
+  values (
+    event_id,
+    trim(caller_id),
+    tool_name,
+    run_count,
+    coalesce(metadata, '{}'::jsonb)
+  );
+
+  return account;
+end;
+$$;

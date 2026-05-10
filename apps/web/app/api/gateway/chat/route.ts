@@ -18,7 +18,7 @@ export async function POST(request: Request) {
       cache: "no-store",
       signal: AbortSignal.timeout(30000)
     });
-    const body = await response.json();
+    const body = await readJson(response);
     return NextResponse.json(body, { status: response.status });
   } catch (error) {
     return NextResponse.json(
@@ -31,10 +31,25 @@ export async function POST(request: Request) {
 }
 
 function gatewayHeaders() {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "User-Agent": "Crucible-Dashboard/0.1"
+  };
   const apiKey = process.env.ANYGPU_GATEWAY_API_KEY?.trim();
   if (apiKey) {
     headers.Authorization = `Bearer ${apiKey}`;
   }
   return headers;
+}
+
+async function readJson(response: Response) {
+  const text = await response.text();
+  if (!text.trim()) {
+    throw new Error(`Gateway chat returned empty body with HTTP ${response.status}.`);
+  }
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(`Gateway chat returned non-JSON body with HTTP ${response.status}.`);
+  }
 }

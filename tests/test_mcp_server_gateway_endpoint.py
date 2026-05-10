@@ -58,3 +58,40 @@ def test_mcp_registers_deployment_as_real_gateway_route(tmp_path, monkeypatch) -
     assert route["simulated"] is False
     assert route["runtime_url"] == "http://203.0.113.9:8000"
     assert route["upstream_api_key"] == "upstream-key"
+
+
+def test_public_gateway_response_hides_upstream_secrets() -> None:
+    safe = server._safe_gateway_response(
+        {
+            "base_url": "http://127.0.0.1:8765/v1",
+            "model": "local-chat",
+            "upstream_url": "http://203.0.113.9:8000/v1/chat/completions",
+            "api_key": "public-nope",
+            "upstream_api_key": "upstream-nope",
+        }
+    )
+
+    assert safe == {
+        "base_url": "http://127.0.0.1:8765/v1",
+        "model": "local-chat",
+        "authentication": "handled_by_server_proxy",
+    }
+
+
+def test_public_mcp_credit_helper_requires_user_in_public_mode(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("ANYGPU_HOME", str(tmp_path / "anygpu"))
+    monkeypatch.setenv("CRUCIBLE_PUBLIC_MCP_REQUIRE_CREDITS", "true")
+    monkeypatch.setenv("CRUCIBLE_PUBLIC_MCP_STARTING_CREDITS", "5")
+
+    try:
+        server._maybe_consume_public_credit("deploy_cheapest", None)
+    except RuntimeError as exc:
+        assert str(exc) == "public_user_id is required for this public MCP server."
+    else:
+        raise AssertionError("public mode should require a public_user_id")
+
+    result = server._maybe_consume_public_credit("deploy_cheapest", "install-123")
+
+    assert result is not None
+    assert result["account"]["remaining_runs"] == 4
+    assert result["account"]["policy"]["secret_exposure"] == "server_only"

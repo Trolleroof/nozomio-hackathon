@@ -8,6 +8,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
+from anygpu.domain import record_usage
 from anygpu.gateway import _proxy_to_runtime, _refresh_deployment_health, make_server
 from anygpu.state import initial_state
 
@@ -125,6 +126,7 @@ def test_gateway_forwards_upstream_api_key(monkeypatch) -> None:
         captured["url"] = request.full_url
         captured["timeout"] = timeout
         captured["authorization"] = request.get_header("Authorization")
+        captured["user_agent"] = request.get_header("User-agent")
         return FakeResponse()
 
     monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
@@ -140,6 +142,32 @@ def test_gateway_forwards_upstream_api_key(monkeypatch) -> None:
     assert status == 200
     assert captured["url"] == "http://127.0.0.1:8000/v1/chat/completions"
     assert captured["authorization"] == "Bearer secret-upstream-key"
+    assert captured["user_agent"] == "AnyGPU-Gateway/0.1"
+
+
+def test_record_usage_initializes_metrics_for_mcp_gateway_routes() -> None:
+    state = initial_state()
+    state["deployments"]["local-chat"] = {
+        "name": "local-chat",
+        "provider": "runpod",
+        "health": "healthy",
+        "routes": [
+            {
+                "route": "mcp:runpod:pod-123",
+                "runtime": "vllm",
+                "status": "healthy",
+                "simulated": False,
+                "estimated_cost": 0.16,
+            }
+        ],
+    }
+
+    usage = record_usage(state, "local-chat", prompt_tokens=7, completion_tokens=11, latency_ms=1234)
+
+    assert usage["total_tokens"] == 18
+    assert state["deployments"]["local-chat"]["metrics"]["p95_ms"] == 1234
+    assert state["usage_events"][0]["deployment"] == "local-chat"
+    assert state["cost_events"][0]["deployment"] == "local-chat"
 
 
 def test_gateway_refreshes_docker_route_health_before_selection(monkeypatch) -> None:

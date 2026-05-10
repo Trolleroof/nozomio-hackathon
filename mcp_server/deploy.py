@@ -227,7 +227,7 @@ async def _poll_runpod_endpoint(pod_id: str, vllm_api_key: str, timeout: int = 6
                 headers={"Authorization": f"Bearer {api_key}"},
                 timeout=15,
             )
-            data = resp.json().get("data", {}).get("pod", {})
+            data = resp.json().get("data", {}).get("pod") or {}
             for port_info in (data.get("runtime") or {}).get("ports", []):
                 if port_info.get("privatePort") == VLLM_PORT:
                     if port_info.get("isIpPublic"):

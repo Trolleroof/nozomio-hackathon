@@ -71,6 +71,28 @@ python -m anygpu crucible mcp-call crucible_search_context \
   --arguments-json '{"query":"Qwen 7B cheapest GPU health check"}'
 ```
 
+### Public MCP credit gate
+
+The public HTTP MCP server is designed to spend server-side provider keys without
+ever returning those keys to callers. Start it with:
+
+```bash
+CRUCIBLE_PUBLIC_MCP_REQUIRE_CREDITS=true ./runmcpserver_http.sh
+```
+
+New public callers claim a starter account with five run credits by default:
+
+```text
+claim_public_credit(public_user_id="user-or-install-id")
+get_public_credit_status(public_user_id="user-or-install-id")
+deploy_cheapest(public_user_id="user-or-install-id")
+```
+
+The server consumes one credit before spendable work such as `deploy_cheapest`,
+`create_tensorlake_sandbox`, or `create_vcpu_host`. Responses expose the AnyGPU
+gateway/proxy contract only; upstream provider keys stay in server-side env and
+state. Configure the starter allowance with `CRUCIBLE_PUBLIC_MCP_STARTING_CREDITS`.
+
 ## Quickstart
 
 ```bash

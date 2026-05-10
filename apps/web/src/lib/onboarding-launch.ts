@@ -42,10 +42,28 @@ export function readOnboardingLaunch(storage: Storage): OnboardingLaunch | null 
     if (!parsed.modelId || !parsed.provider || !parsed.accelerator || !parsed.status) {
       return null;
     }
+    if (!isFreshLaunchTimestamp(parsed.createdAt)) {
+      storage.removeItem(onboardingLaunchStorageKey);
+      return null;
+    }
     return parsed as OnboardingLaunch;
   } catch {
     return null;
   }
+}
+
+function isFreshLaunchTimestamp(createdAt: unknown) {
+  if (typeof createdAt !== "string") {
+    return false;
+  }
+  const createdTime = Date.parse(createdAt);
+  if (!Number.isFinite(createdTime)) {
+    return false;
+  }
+  const ageMs = Date.now() - createdTime;
+  const maxAgeMs = 30 * 60 * 1000;
+  const maxFutureSkewMs = 5 * 60 * 1000;
+  return ageMs >= -maxFutureSkewMs && ageMs <= maxAgeMs;
 }
 
 export function objectiveLabel(objective: DeploymentObjective) {

@@ -70,7 +70,10 @@ def _proxy_to_runtime(
     upstream_api_key: str | None = None,
     retry_seconds: float = 30.0,
 ) -> tuple[int, dict[str, Any], dict[str, str]]:
-    headers = {"Content-Type": "application/json"}
+    headers = {
+        "Content-Type": "application/json",
+        "User-Agent": "AnyGPU-Gateway/0.1",
+    }
     if upstream_api_key:
         headers["Authorization"] = f"Bearer {upstream_api_key}"
     request = urllib.request.Request(
