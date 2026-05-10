@@ -3,7 +3,7 @@ import importlib
 import json
 import os
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Optional
 
 try:
     from mcp.server.fastmcp import FastMCP
@@ -75,6 +75,17 @@ def _prepare_provider_environment() -> None:
 def _tensorlake_adapter():
     _load_local_dotenv()
     return importlib.import_module("anygpu.tensorlake_sandbox")
+
+
+def _crucible_store():
+    _load_local_dotenv()
+    store_module = importlib.import_module("anygpu.crucible_store")
+    return store_module.CrucibleStore()
+
+
+def _call_crucible_tool(tool_name: str, arguments: dict[str, Any]) -> str:
+    mcp_module = importlib.import_module("anygpu.crucible_mcp")
+    return json.dumps(mcp_module.handle_tool_call(_crucible_store(), tool_name, arguments), indent=2)
 
 
 def _anygpu_gateway_endpoint() -> Optional[dict]:
@@ -331,6 +342,286 @@ async def teardown() -> str:
     _active = None
 
     return json.dumps({"status": "terminated", "final_spend": spend}, indent=2)
+
+
+@mcp.tool()
+def crucible_plan_deployment(
+    userId: str,
+    prompt: str,
+    sourceAgent: Optional[str] = None,
+    modelId: Optional[str] = None,
+    objective: Optional[str] = None,
+) -> str:
+    """Create a Crucible GPU deployment plan from a natural-language request."""
+    return _call_crucible_tool(
+        "crucible_plan_deployment",
+        {
+            "userId": userId,
+            "prompt": prompt,
+            "sourceAgent": sourceAgent,
+            "modelId": modelId,
+            "objective": objective,
+        },
+    )
+
+
+@mcp.tool()
+def crucible_approve_plan(planId: str, userId: str) -> str:
+    """Record explicit approval before launching planned GPU resources."""
+    return _call_crucible_tool(
+        "crucible_approve_plan",
+        {
+            "planId": planId,
+            "userId": userId,
+        },
+    )
+
+
+@mcp.tool()
+def crucible_deploy_approved_plan(planId: str, approvalToken: Optional[str] = None) -> str:
+    """Deploy an approved Crucible plan, enforcing the approval token gate."""
+    return _call_crucible_tool(
+        "crucible_deploy_approved_plan",
+        {
+            "planId": planId,
+            "approvalToken": approvalToken,
+        },
+    )
+
+
+@mcp.tool()
+def crucible_get_deployment_status(deploymentId: str) -> str:
+    """Fetch Crucible deployment status and endpoint metadata."""
+    return _call_crucible_tool("crucible_get_deployment_status", {"deploymentId": deploymentId})
+
+
+@mcp.tool()
+def crucible_get_logs(deploymentId: str) -> str:
+    """Fetch Crucible deployment lifecycle logs."""
+    return _call_crucible_tool("crucible_get_logs", {"deploymentId": deploymentId})
+
+
+@mcp.tool()
+def crucible_run_health_check(deploymentId: str) -> str:
+    """Run the stored Crucible deployment health-check workflow."""
+    return _call_crucible_tool("crucible_run_health_check", {"deploymentId": deploymentId})
+
+
+@mcp.tool()
+def crucible_stop_deployment(deploymentId: str) -> str:
+    """Stop a Crucible deployment record and append stop logs."""
+    return _call_crucible_tool("crucible_stop_deployment", {"deploymentId": deploymentId})
+
+
+@mcp.tool()
+def crucible_create_experiment_branch(
+    name: str,
+    parentBranch: Optional[str] = None,
+    schemaSnapshot: Optional[dict[str, Any]] = None,
+) -> str:
+    """Create an isolated InsForge-style experiment branch for RL environment or workflow changes."""
+    return _call_crucible_tool(
+        "crucible_create_experiment_branch",
+        {
+            "name": name,
+            "parentBranch": parentBranch,
+            "schemaSnapshot": schemaSnapshot,
+        },
+    )
+
+
+@mcp.tool()
+def crucible_create_environment_contract(
+    name: str,
+    envSpec: dict[str, Any],
+    observationSchema: dict[str, Any],
+    actionSchema: dict[str, Any],
+    rewardSpec: dict[str, Any],
+    passCriteria: dict[str, Any],
+    branchName: Optional[str] = None,
+) -> str:
+    """Create an agent-readable RL environment contract."""
+    return _call_crucible_tool(
+        "crucible_create_environment_contract",
+        {
+            "name": name,
+            "envSpec": envSpec,
+            "observationSchema": observationSchema,
+            "actionSchema": actionSchema,
+            "rewardSpec": rewardSpec,
+            "passCriteria": passCriteria,
+            "branchName": branchName,
+        },
+    )
+
+
+@mcp.tool()
+def crucible_request_gpu_run(
+    userId: str,
+    prompt: str,
+    envContractId: str,
+    providerOffers: list[dict[str, Any]],
+    costEstimate: dict[str, Any],
+    sourceAgent: Optional[str] = None,
+) -> str:
+    """Create a durable RL/GPU run capsule that cannot launch until approved."""
+    return _call_crucible_tool(
+        "crucible_request_gpu_run",
+        {
+            "userId": userId,
+            "prompt": prompt,
+            "envContractId": envContractId,
+            "providerOffers": providerOffers,
+            "costEstimate": costEstimate,
+            "sourceAgent": sourceAgent,
+        },
+    )
+
+
+@mcp.tool()
+def crucible_approve_gpu_run(
+    runId: str,
+    approvedBy: str,
+    provider: str,
+    budgetUsd: float,
+    maxRuntimeMinutes: int,
+    teardownPolicy: dict[str, Any],
+) -> str:
+    """Create the signed approval ledger row required before a paid RL/GPU run launches."""
+    return _call_crucible_tool(
+        "crucible_approve_gpu_run",
+        {
+            "runId": runId,
+            "approvedBy": approvedBy,
+            "provider": provider,
+            "budgetUsd": budgetUsd,
+            "maxRuntimeMinutes": maxRuntimeMinutes,
+            "teardownPolicy": teardownPolicy,
+        },
+    )
+
+
+@mcp.tool()
+def crucible_launch_gpu_run(
+    runId: str,
+    approvalToken: str,
+    execute: bool = False,
+    executionMode: Optional[str] = None,
+    gpu: Optional[str] = None,
+    updates: Optional[int] = None,
+    nEnvs: Optional[int] = None,
+    rolloutSteps: Optional[int] = None,
+    ppoEpochs: Optional[int] = None,
+    minibatchSize: Optional[int] = None,
+) -> str:
+    """Launch an approved RL/GPU run capsule, optionally executing the Modal RL smoke."""
+    return _call_crucible_tool(
+        "crucible_launch_gpu_run",
+        {
+            "runId": runId,
+            "approvalToken": approvalToken,
+            "execute": execute,
+            "executionMode": executionMode,
+            "gpu": gpu,
+            "updates": updates,
+            "nEnvs": nEnvs,
+            "rolloutSteps": rolloutSteps,
+            "ppoEpochs": ppoEpochs,
+            "minibatchSize": minibatchSize,
+        },
+    )
+
+
+@mcp.tool()
+def crucible_record_training_event(
+    runId: str,
+    phase: str,
+    rolloutCount: Optional[int] = None,
+    rewardMean: Optional[float] = None,
+    successRate: Optional[float] = None,
+    costBurnUsd: Optional[float] = None,
+    gpuName: Optional[str] = None,
+    message: str = "",
+) -> str:
+    """Append realtime-style training progress for an RL/GPU run capsule."""
+    return _call_crucible_tool(
+        "crucible_record_training_event",
+        {
+            "runId": runId,
+            "phase": phase,
+            "rolloutCount": rolloutCount,
+            "rewardMean": rewardMean,
+            "successRate": successRate,
+            "costBurnUsd": costBurnUsd,
+            "gpuName": gpuName,
+            "message": message,
+        },
+    )
+
+
+@mcp.tool()
+def crucible_record_compute_memory(
+    provider: str,
+    eventType: str,
+    status: str,
+    summary: str,
+    runId: Optional[str] = None,
+    gpuName: Optional[str] = None,
+    region: Optional[str] = None,
+    pricing: Optional[dict[str, Any]] = None,
+    compatibility: Optional[dict[str, Any]] = None,
+) -> str:
+    """Persist provider pricing, quota, compatibility, or run outcome evidence for future agents."""
+    return _call_crucible_tool(
+        "crucible_record_compute_memory",
+        {
+            "runId": runId,
+            "provider": provider,
+            "gpuName": gpuName,
+            "region": region,
+            "eventType": eventType,
+            "status": status,
+            "summary": summary,
+            "pricing": pricing,
+            "compatibility": compatibility,
+        },
+    )
+
+
+@mcp.tool()
+def crucible_publish_run_artifact(
+    runId: str,
+    kind: str,
+    uri: str,
+    metadata: dict[str, Any],
+    storageBucket: Optional[str] = None,
+) -> str:
+    """Attach storage artifact metadata and audit fields to an RL/GPU run capsule."""
+    return _call_crucible_tool(
+        "crucible_publish_run_artifact",
+        {
+            "runId": runId,
+            "kind": kind,
+            "uri": uri,
+            "metadata": metadata,
+            "storageBucket": storageBucket,
+        },
+    )
+
+
+@mcp.tool()
+def crucible_recommend_next_gpu_run(
+    envContractId: Optional[str] = None,
+    objective: Optional[str] = None,
+) -> str:
+    """Recommend the cheapest verified next RL/GPU run from stored capsules and artifacts."""
+    return _call_crucible_tool(
+        "crucible_recommend_next_gpu_run",
+        {
+            "envContractId": envContractId,
+            "objective": objective,
+        },
+    )
 
 
 @mcp.tool()
