@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import importlib
+from pathlib import Path
 from typing import Any, Callable
 
+from .modal_rl_executor import execute_modal_rl_smoke
 from .crucible import (
     ApprovalRequiredError,
     approve_plan,
@@ -18,6 +20,7 @@ from .insforge_compute import (
     approve_gpu_run,
     create_experiment_branch,
     create_environment_contract,
+    get_run_capsule,
     launch_gpu_run,
     list_run_capsules,
     merge_experiment_branch,
@@ -210,10 +213,21 @@ TOOLS: list[JSON] = [
     },
     {
         "name": "crucible_launch_gpu_run",
-        "description": "Mark an RL/GPU run capsule launched only after validating its signed approval token.",
+        "description": "Launch an RL/GPU run capsule after validating its signed approval token; optionally execute the Modal RL smoke.",
         "inputSchema": {
             "type": "object",
-            "properties": {"runId": {"type": "string"}, "approvalToken": {"type": "string"}},
+            "properties": {
+                "runId": {"type": "string"},
+                "approvalToken": {"type": "string"},
+                "execute": {"type": "boolean"},
+                "executionMode": {"type": "string", "enum": ["record", "modal"]},
+                "gpu": {"type": "string"},
+                "updates": {"type": "integer"},
+                "nEnvs": {"type": "integer"},
+                "rolloutSteps": {"type": "integer"},
+                "ppoEpochs": {"type": "integer"},
+                "minibatchSize": {"type": "integer"},
+            },
             "required": ["runId", "approvalToken"],
         },
     },
@@ -279,6 +293,11 @@ TOOLS: list[JSON] = [
                 "objective": {"type": "string"},
             },
         },
+    },
+    {
+        "name": "crucible_list_execution_features",
+        "description": "Return the MCP execution matrix for RL environments, Modal smoke runs, and model deployments.",
+        "inputSchema": {"type": "object", "properties": {}},
     },
     {
         "name": "crucible_create_tensorlake_sandbox",
@@ -580,13 +599,17 @@ def handle_tool_call(store: Any, tool_name: str, arguments: JSON | None = None) 
                 )
             )
         if tool_name == "crucible_launch_gpu_run":
-            return _ok(
-                launch_gpu_run(
-                    store,
-                    _require(arguments, "runId"),
-                    approval_token=_require(arguments, "approvalToken"),
-                )
+            launched = launch_gpu_run(
+                store,
+                _require(arguments, "runId"),
+                approval_token=_require(arguments, "approvalToken"),
             )
+            if arguments.get("execute") or arguments.get("executionMode") == "modal":
+                mode = arguments.get("executionMode") or "modal"
+                if mode != "modal":
+                    raise ValueError(f"Unsupported executionMode {mode!r}.")
+                return _ok(_execute_modal_rl_run(store, launched, arguments))
+            return _ok(launched)
         if tool_name == "crucible_record_training_event":
             return _ok(
                 record_training_event(
@@ -635,6 +658,8 @@ def handle_tool_call(store: Any, tool_name: str, arguments: JSON | None = None) 
                     objective=arguments.get("objective") or "cheapest_verified_improving",
                 )
             )
+        if tool_name == "crucible_list_execution_features":
+            return _ok(_execution_features())
         if tool_name == "crucible_create_tensorlake_sandbox":
             adapter = _tensorlake_adapter()
             create_args: dict[str, Any] = {}

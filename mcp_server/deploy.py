@@ -2,6 +2,8 @@ import asyncio
 import os
 import secrets
 import time
+import tomllib
+from pathlib import Path
 from typing import Optional
 
 import httpx
@@ -35,9 +37,36 @@ def _generate_api_key() -> str:
 
 def _required_env(name: str) -> str:
     value = os.environ.get(name, "").strip()
+    if not value and name in {"MODAL_TOKEN_ID", "MODAL_TOKEN_SECRET"}:
+        _load_modal_local_config()
+        value = os.environ.get(name, "").strip()
     if not value:
         raise RuntimeError(f"{name} is required.")
     return value
+
+
+def _load_modal_local_config() -> None:
+    if os.environ.get("MODAL_TOKEN_ID") and os.environ.get("MODAL_TOKEN_SECRET"):
+        return
+    path = Path.home() / ".modal.toml"
+    if not path.exists():
+        return
+    try:
+        data = tomllib.loads(path.read_text())
+    except Exception:
+        return
+    profile_name = os.environ.get("MODAL_PROFILE")
+    profile = data.get(profile_name) if profile_name else None
+    if not isinstance(profile, dict):
+        profile = next((value for value in data.values() if isinstance(value, dict)), None)
+    if not isinstance(profile, dict):
+        return
+    token_id = profile.get("token_id")
+    token_secret = profile.get("token_secret")
+    if token_id and "MODAL_TOKEN_ID" not in os.environ:
+        os.environ["MODAL_TOKEN_ID"] = str(token_id)
+    if token_secret and "MODAL_TOKEN_SECRET" not in os.environ:
+        os.environ["MODAL_TOKEN_SECRET"] = str(token_secret)
 
 
 async def _wait_for_endpoint(url: str, api_key: Optional[str] = None, timeout: int = 600) -> bool:
@@ -157,7 +186,11 @@ async def _deploy_runpod(offer: GpuOffer, vllm_api_key: str) -> DeployedInstance
             timeout=60,
         )
         resp.raise_for_status()
-        pod = resp.json().get("data", {}).get("podFindAndDeployOnDemand", {})
+        data = resp.json()
+        runpod._raise_graphql_errors(data)
+        pod = data.get("data", {}).get("podFindAndDeployOnDemand")
+        if not pod:
+            raise RuntimeError(f"RunPod launch did not return a pod: {data}")
 
     pod_id = pod["id"]
     endpoint = await _poll_runpod_endpoint(pod_id, vllm_api_key)
@@ -289,10 +322,18 @@ async def _ssh_bootstrap(ip: str, script: str, port: int = 22) -> None:
         port=port,
         username="ubuntu",
         known_hosts=None,
-        client_keys=[os.path.expanduser("~/.ssh/id_rsa")],
+        client_keys=_default_ssh_client_keys(),
         connect_timeout=30,
     ) as conn:
         await conn.run(script, check=True)
+
+
+def _default_ssh_client_keys() -> list[str]:
+    candidates = [
+        Path.home() / ".ssh" / "id_rsa",
+        Path.home() / ".ssh" / "id_ed25519",
+    ]
+    return [str(path) for path in candidates if path.exists()]
 
 
 async def teardown(instance: DeployedInstance) -> None:

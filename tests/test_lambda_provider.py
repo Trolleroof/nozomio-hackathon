@@ -6,6 +6,7 @@ from typing import Any
 import pytest
 
 from mcp_server.models import GpuOffer
+from mcp_server import deploy as deploy_module
 from mcp_server.providers import lambda_labs
 from anygpu.crucible import list_provider_capabilities
 from anygpu.crucible_store import CrucibleStore
@@ -128,6 +129,15 @@ def test_launch_uses_offer_credential_source(monkeypatch: pytest.MonkeyPatch) ->
     assert result["data"]["instance_ids"] == ["i-123"]
     assert client.calls[0]["auth"] == ("api-key", "")
     assert client.calls[0]["json"]["ssh_key_names"] == ["agent-key"]
+
+
+def test_ssh_bootstrap_uses_available_ed25519_key(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    ssh_dir = tmp_path / ".ssh"
+    ssh_dir.mkdir()
+    (ssh_dir / "id_ed25519").write_text("private-key")
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    assert deploy_module._default_ssh_client_keys() == [str(ssh_dir / "id_ed25519")]
 
 
 def test_crucible_registry_advertises_both_lambda_key_names(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
