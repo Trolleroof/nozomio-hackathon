@@ -5,6 +5,7 @@ import sys
 from typing import Any
 
 from .crucible import create_deployment_plan, ensure_backend_user
+from .crucible_mcp import handle_tool_call
 from .crucible_store import CrucibleStore
 
 
@@ -14,9 +15,19 @@ def main() -> int:
         if not isinstance(payload, dict):
             raise ValueError("Bridge payload must be a JSON object.")
         action = payload.get("action") or "plan"
+        store = CrucibleStore()
+        if action == "mcp_snapshot":
+            print(json.dumps(_mcp_snapshot(store), sort_keys=True))
+            return 0
+        if action == "mcp_call":
+            tool_name = _required_string(payload, "toolName")
+            arguments = payload.get("arguments") or {}
+            if not isinstance(arguments, dict):
+                raise ValueError("arguments must be a JSON object.")
+            print(json.dumps(handle_tool_call(store, tool_name, arguments), sort_keys=True))
+            return 0
         if action != "plan":
             raise ValueError(f"Unsupported bridge action {action}.")
-        store = CrucibleStore()
         user = ensure_backend_user(
             store,
             str(payload.get("userId") or "anonymous-web-user"),
@@ -49,6 +60,21 @@ def _optional_string(value: Any) -> str | None:
         stripped = value.strip()
         return stripped or None
     return None
+
+
+def _mcp_snapshot(store: CrucibleStore) -> dict[str, Any]:
+    deployments = handle_tool_call(store, "crucible_list_deployments", {})
+    run_capsules = handle_tool_call(store, "crucible_list_run_capsules", {})
+    return {
+        "source": "crucible_mcp",
+        "deployments": [] if deployments.get("isError") else deployments.get("content", []),
+        "run_capsules": [] if run_capsules.get("isError") else run_capsules.get("content", []),
+        "errors": [
+            response["content"]["error"]
+            for response in (deployments, run_capsules)
+            if response.get("isError") and isinstance(response.get("content"), dict) and response["content"].get("error")
+        ],
+    }
 
 
 if __name__ == "__main__":

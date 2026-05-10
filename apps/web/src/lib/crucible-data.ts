@@ -6,11 +6,12 @@ import type {
   HealthCheck,
   HealthStatus,
   NiaContextSnippet,
+  NiaProviderPrice,
   ProviderCapability,
   ProviderStatus
 } from "@crucible/shared/crucible-contract";
 
-import { hasNiaApiKey, searchNia } from "./nia-server";
+import { NIA_PROVIDER_PRICE_QUERY, hasNiaApiKey, searchNia } from "./nia-server";
 
 interface GatewayModel {
   id?: unknown;
@@ -145,6 +146,14 @@ export async function listContextSnippets(): Promise<NiaContextSnippet[]> {
   }
   const response = await searchNia("Crucible deployment provider health model endpoint readiness");
   return response.snippets;
+}
+
+export async function listNiaProviderPrices(): Promise<NiaProviderPrice[]> {
+  if (!hasNiaApiKey()) {
+    return [];
+  }
+  const response = await searchNia(NIA_PROVIDER_PRICE_QUERY);
+  return response.prices;
 }
 
 export function listApiTokens(): ApiToken[] {

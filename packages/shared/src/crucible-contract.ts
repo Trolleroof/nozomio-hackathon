@@ -97,6 +97,18 @@ export interface NiaContextSnippet {
   searchedAt: string;
 }
 
+export interface NiaProviderPrice {
+  id: string;
+  provider: string;
+  priceText: string;
+  source: string;
+  searchedAt: string;
+  accelerator?: string;
+  region?: string;
+  availability?: string;
+  pricePerHourUsd?: number;
+}
+
 export interface Deployment {
   id: string;
   planId: string;

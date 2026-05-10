@@ -1,27 +1,38 @@
 "use client";
 
-import type { NiaContextSnippet } from "@crucible/shared/crucible-contract";
-import { BadgeCheck, BookOpenText, BrainCircuit, Network, Search } from "lucide-react";
+import type { NiaContextSnippet, NiaProviderPrice } from "@crucible/shared/crucible-contract";
+import { BadgeCheck, BookOpenText, BrainCircuit, DollarSign, Network, RefreshCw, Search } from "lucide-react";
 import { FormEvent, useMemo, useState } from "react";
 
 import { formatDateTime } from "@/lib/format";
 
 interface ContextPanelProps {
   niaConnected: boolean;
+  prices: NiaProviderPrice[];
   snippets: NiaContextSnippet[];
 }
 
-export function ContextPanel({ niaConnected, snippets }: ContextPanelProps) {
+const providerPriceQuery =
+  "Find current hourly GPU prices per provider/platform for Modal, RunPod, Vast.ai, Vultr, Lambda Cloud, CoreWeave, SkyPilot, Tensorlake, and any other indexed AnyGPU providers. Include provider, GPU or instance type, region when available, availability, and USD per hour.";
+
+export function ContextPanel({ niaConnected, prices, snippets }: ContextPanelProps) {
   const [query, setQuery] = useState("Qwen 7B deployment health check");
   const [activeSnippets, setActiveSnippets] = useState(snippets);
+  const [activePrices, setActivePrices] = useState(prices);
   const [status, setStatus] = useState(niaConnected ? "ready" : "idle");
+  const [priceStatus, setPriceStatus] = useState(niaConnected ? "ready" : "idle");
   const [error, setError] = useState<string | null>(null);
   const lastSync = useMemo(() => activeSnippets
     .map((snippet) => snippet.searchedAt)
     .sort()
     .at(-1), [activeSnippets]);
+  const priceLastSync = useMemo(() => activePrices
+    .map((price) => price.searchedAt)
+    .sort()
+    .at(-1), [activePrices]);
   const sourceCount = useMemo(() => new Set(activeSnippets.map((snippet) => sourceHost(snippet.source))).size, [activeSnippets]);
   const decisionChecks = useMemo(() => uniqueDecisionChecks(activeSnippets), [activeSnippets]);
+  const providerCount = useMemo(() => new Set(activePrices.map((price) => price.provider)).size, [activePrices]);
 
   async function handleSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -42,11 +53,43 @@ export function ContextPanel({ niaConnected, snippets }: ContextPanelProps) {
         throw new Error(body.error || "Nia search failed.");
       }
       setActiveSnippets(body.snippets);
+      const nextPrices = Array.isArray(body.prices) ? body.prices : [];
+      if (nextPrices.length > 0 || activePrices.length === 0) {
+        setActivePrices(nextPrices);
+      }
       setStatus(body.connected ? "ready" : "cached");
       setError(body.error ?? null);
     } catch (searchError) {
       setStatus("cached");
       setError(searchError instanceof Error ? searchError.message : "Nia search failed.");
+    }
+  }
+
+  async function refreshProviderPrices() {
+    if (!niaConnected) {
+      return;
+    }
+    setPriceStatus("searching");
+    setError(null);
+    try {
+      const response = await fetch("/api/nia/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: providerPriceQuery })
+      });
+      const body = await response.json();
+      if (!response.ok || !Array.isArray(body.prices)) {
+        throw new Error(body.error || "Nia price search failed.");
+      }
+      setActivePrices(body.prices);
+      if (body.snippets?.length && activeSnippets.length === 0) {
+        setActiveSnippets(body.snippets);
+      }
+      setPriceStatus(body.connected ? "ready" : "cached");
+      setError(body.error ?? null);
+    } catch (searchError) {
+      setPriceStatus("cached");
+      setError(searchError instanceof Error ? searchError.message : "Nia price search failed.");
     }
   }
 
@@ -95,6 +138,66 @@ export function ContextPanel({ niaConnected, snippets }: ContextPanelProps) {
           </div>
           <p className="mt-3 text-3xl font-semibold">{decisionChecks.length}</p>
           <p className="mt-1 text-sm text-muted-foreground">Plan choices with cited Nia evidence</p>
+        </div>
+      </div>
+
+      <div className="crucible-card">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <DollarSign aria-hidden="true" className="h-4 w-4 text-forge" />
+              Live provider prices
+            </div>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {activePrices.length
+                ? `${activePrices.length} price point${activePrices.length === 1 ? "" : "s"} across ${providerCount} provider${providerCount === 1 ? "" : "s"}`
+                : "No live provider prices found yet."}
+            </p>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <span className="font-mono text-xs text-muted-foreground">Last price sync {formatDateTime(priceLastSync)}</span>
+            <button
+              className="crucible-secondary inline-flex min-h-10 items-center gap-2 px-3"
+              disabled={!niaConnected || priceStatus === "searching"}
+              onClick={refreshProviderPrices}
+              type="button"
+            >
+              <RefreshCw aria-hidden="true" className={`h-4 w-4 ${priceStatus === "searching" ? "animate-spin" : ""}`} />
+              {priceStatus === "searching" ? "Refreshing" : "Refresh prices"}
+            </button>
+          </div>
+        </div>
+        <div className="mt-4 overflow-hidden rounded-md border border-border">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-surface-raised text-xs uppercase tracking-[0.12em] text-muted-foreground">
+              <tr>
+                <th className="px-3 py-2 font-medium">Provider</th>
+                <th className="px-3 py-2 font-medium">GPU / SKU</th>
+                <th className="px-3 py-2 font-medium">Region</th>
+                <th className="px-3 py-2 font-medium">Price</th>
+                <th className="px-3 py-2 font-medium">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {activePrices.length ? (
+                activePrices.map((price) => (
+                  <tr key={price.id}>
+                    <td className="px-3 py-3 font-medium text-foreground">{price.provider}</td>
+                    <td className="px-3 py-3 text-muted-foreground">{price.accelerator ?? "Any GPU"}</td>
+                    <td className="px-3 py-3 text-muted-foreground">{price.region ?? "Any region"}</td>
+                    <td className="px-3 py-3 font-mono text-foreground">{price.priceText}</td>
+                    <td className="px-3 py-3 text-muted-foreground">{price.availability ?? sourceHost(price.source)}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td className="px-3 py-4 text-muted-foreground" colSpan={5}>
+                    {niaConnected ? "Refresh prices to ask Nia for current provider pricing." : "Connect Nia to load provider prices."}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
 

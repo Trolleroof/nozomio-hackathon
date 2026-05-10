@@ -17,6 +17,20 @@ const snippets = [
   }
 ];
 
+const prices = [
+  {
+    id: "nia_price_0",
+    provider: "RunPod",
+    accelerator: "NVIDIA L4",
+    region: "US",
+    availability: "available",
+    pricePerHourUsd: 0.44,
+    priceText: "$0.44/hr",
+    source: "nia://pricing/runpod",
+    searchedAt: "2026-05-09T20:00:00.000Z"
+  }
+];
+
 describe("Nia search API route", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
@@ -36,6 +50,7 @@ describe("Nia search API route", () => {
 
     expect(body.connected).toBe(false);
     expect(body.snippets).toEqual([]);
+    expect(body.prices).toEqual([]);
     expect(JSON.stringify(body)).not.toContain("Fixture context");
   });
 
@@ -50,6 +65,16 @@ describe("Nia search API route", () => {
             title: "Live Qwen recipe",
             source: "nia://repo/recipes/qwen",
             text: "Use one economical GPU first, then verify OpenAI-compatible health checks."
+          },
+          {
+            title: "RunPod prices",
+            source: "nia://pricing/runpod",
+            provider: "RunPod",
+            gpu_name: "NVIDIA L4",
+            region: "US",
+            price_per_hour_usd: 0.44,
+            availability: "available",
+            text: "RunPod NVIDIA L4 is available at $0.44/hr in US."
           }
         ]
       })
@@ -79,9 +104,55 @@ describe("Nia search API route", () => {
         excerpt: "Use one economical GPU first, then verify OpenAI-compatible health checks.",
         usedFor: "Nia search: Qwen 7B deployment",
         searchedAt: expect.any(String)
+      },
+      {
+        id: "nia_1",
+        source: "nia://pricing/runpod",
+        title: "RunPod prices",
+        excerpt: "RunPod NVIDIA L4 is available at $0.44/hr in US.",
+        usedFor: "Nia search: Qwen 7B deployment",
+        searchedAt: expect.any(String)
+      }
+    ]);
+    expect(body.prices).toEqual([
+      {
+        id: "nia_price_1",
+        provider: "RunPod",
+        accelerator: "NVIDIA L4",
+        region: "US",
+        availability: "available",
+        pricePerHourUsd: 0.44,
+        priceText: "$0.44/hr",
+        source: "nia://pricing/runpod",
+        searchedAt: expect.any(String)
       }
     ]);
     expect(JSON.stringify(body)).not.toContain("test-nia-token");
+  });
+
+  it("extracts provider prices from Nia prose answers", async () => {
+    vi.stubEnv("NIA_API_KEY", "test-nia-token");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        answer: "Current provider prices: Modal L4 $0.80/hr; Vast.ai H100 $4.50/hr available; Vultr A100 $2.40/hr in ewr."
+      })
+    }));
+
+    const response = await POST(
+      new Request("http://localhost/api/nia/search", {
+        method: "POST",
+        body: JSON.stringify({ query: "provider prices" })
+      })
+    );
+    const body = await response.json();
+
+    expect(body.prices).toEqual([
+      expect.objectContaining({ provider: "Modal", accelerator: "L4", priceText: "$0.80/hr" }),
+      expect.objectContaining({ provider: "Vast.ai", accelerator: "H100", priceText: "$4.50/hr", availability: "available" }),
+      expect.objectContaining({ provider: "Vultr", accelerator: "A100", region: "ewr", priceText: "$2.40/hr" })
+    ]);
   });
 });
 
@@ -104,20 +175,34 @@ describe("ContextPanel", () => {
             usedFor: "Nia search: provider status",
             searchedAt: "2026-05-09T20:00:00.000Z"
           }
+        ],
+        prices: [
+          {
+            id: "nia_price_1",
+            provider: "Vast.ai",
+            accelerator: "H100",
+            priceText: "$4.50/hr",
+            source: "nia://pricing/vast",
+            searchedAt: "2026-05-09T20:00:00.000Z"
+          }
         ]
       })
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    render(<ContextPanel niaConnected snippets={snippets} />);
+    render(<ContextPanel niaConnected prices={prices} snippets={snippets} />);
 
     expect(screen.getByText("Nia is connected and grounding deployment decisions in live indexed context.")).toBeInTheDocument();
+    expect(screen.getByText("Live provider prices")).toBeInTheDocument();
+    expect(screen.getByText("RunPod")).toBeInTheDocument();
+    expect(screen.getByText("$0.44/hr")).toBeInTheDocument();
     expect(screen.getByText("What Nia proved for this deployment")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Search Nia context"), { target: { value: "provider status" } });
     fireEvent.click(screen.getByRole("button", { name: "Search" }));
 
     await waitFor(() => expect(screen.getByText("Provider notes")).toBeInTheDocument());
     expect(screen.getAllByText("provider status")).toHaveLength(2);
+    expect(screen.getByText("Vast.ai")).toBeInTheDocument();
     expect(screen.getByText("cited in plan")).toBeInTheDocument();
     expect(screen.queryByText("Fixture context")).not.toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(

@@ -32,6 +32,8 @@ from .models import DeployedInstance
 from .providers import fetch_lambda, fetch_runpod, fetch_vast, fetch_modal
 from . import deploy as deploy_module
 from . import monitor
+from anygpu.crucible_mcp import handle_tool_call
+from anygpu.crucible_store import CrucibleStore
 
 
 def _create_mcp() -> FastMCP:
@@ -173,6 +175,10 @@ def _configure_http_transport() -> None:
         mcp.settings.transport_security.allowed_hosts = [
             host.strip() for host in allowed_hosts.split(",") if host.strip()
         ]
+
+
+def _crucible_tool(tool_name: str, arguments: dict | None = None) -> str:
+    return json.dumps(handle_tool_call(CrucibleStore(), tool_name, arguments or {}), indent=2)
 
 
 @mcp.tool()
@@ -471,6 +477,122 @@ def expose_site_port(
 def get_site_status(sandbox_id: Optional[str] = None, name: Optional[str] = None, port: Optional[int] = None) -> str:
     """Return status and public URL metadata for a vCPU-hosted site."""
     return json.dumps(_tensorlake_adapter().get_site_status(sandbox_id=sandbox_id, name=name, port=port), indent=2)
+
+
+@mcp.tool()
+def crucible_list_deployments() -> str:
+    """List Crucible deployments recorded through the Hermes/Crucible MCP control plane."""
+    return _crucible_tool("crucible_list_deployments")
+
+
+@mcp.tool()
+def crucible_create_environment_contract(
+    name: str,
+    env_spec: dict,
+    observation_schema: dict,
+    action_schema: dict,
+    reward_spec: dict,
+    pass_criteria: dict,
+    branch_name: str = "main",
+) -> str:
+    """Create an RL environment contract before a Hermes-triggered training run."""
+    return _crucible_tool(
+        "crucible_create_environment_contract",
+        {
+            "name": name,
+            "envSpec": env_spec,
+            "observationSchema": observation_schema,
+            "actionSchema": action_schema,
+            "rewardSpec": reward_spec,
+            "passCriteria": pass_criteria,
+            "branchName": branch_name,
+        },
+    )
+
+
+@mcp.tool()
+def crucible_request_gpu_run(
+    user_id: str,
+    prompt: str,
+    env_contract_id: str,
+    provider_offers: list[dict],
+    cost_estimate: dict,
+    source_agent: str = "hermes",
+) -> str:
+    """Create a durable RL/GPU run capsule from Hermes or another MCP client."""
+    return _crucible_tool(
+        "crucible_request_gpu_run",
+        {
+            "userId": user_id,
+            "prompt": prompt,
+            "envContractId": env_contract_id,
+            "providerOffers": provider_offers,
+            "costEstimate": cost_estimate,
+            "sourceAgent": source_agent,
+        },
+    )
+
+
+@mcp.tool()
+def crucible_list_run_capsules() -> str:
+    """List RL/GPU run capsules for the dashboard and Hermes agent."""
+    return _crucible_tool("crucible_list_run_capsules")
+
+
+@mcp.tool()
+def crucible_approve_gpu_run(
+    run_id: str,
+    approved_by: str,
+    provider: str,
+    budget_usd: float,
+    max_runtime_minutes: int,
+    teardown_policy: dict,
+) -> str:
+    """Create the signed approval ledger row required before a paid GPU run launches."""
+    return _crucible_tool(
+        "crucible_approve_gpu_run",
+        {
+            "runId": run_id,
+            "approvedBy": approved_by,
+            "provider": provider,
+            "budgetUsd": budget_usd,
+            "maxRuntimeMinutes": max_runtime_minutes,
+            "teardownPolicy": teardown_policy,
+        },
+    )
+
+
+@mcp.tool()
+def crucible_launch_gpu_run(run_id: str, approval_token: str) -> str:
+    """Mark an RL/GPU run capsule running only after signed approval is present."""
+    return _crucible_tool("crucible_launch_gpu_run", {"runId": run_id, "approvalToken": approval_token})
+
+
+@mcp.tool()
+def crucible_record_training_event(
+    run_id: str,
+    phase: str,
+    rollout_count: Optional[int] = None,
+    reward_mean: Optional[float] = None,
+    success_rate: Optional[float] = None,
+    cost_burn_usd: Optional[float] = None,
+    gpu_name: Optional[str] = None,
+    message: str = "",
+) -> str:
+    """Append realtime-style training progress for a run capsule displayed on the dashboard."""
+    return _crucible_tool(
+        "crucible_record_training_event",
+        {
+            "runId": run_id,
+            "phase": phase,
+            "rolloutCount": rollout_count,
+            "rewardMean": reward_mean,
+            "successRate": success_rate,
+            "costBurnUsd": cost_burn_usd,
+            "gpuName": gpu_name,
+            "message": message,
+        },
+    )
 
 
 if __name__ == "__main__":

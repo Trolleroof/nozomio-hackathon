@@ -1,4 +1,4 @@
-import { ArrowRight, BookOpenText, Rocket, ServerCog } from "lucide-react";
+import { ArrowRight, BookOpenText, BrainCircuit, Rocket, ServerCog } from "lucide-react";
 import Link from "next/link";
 
 import { AppFrame } from "@/components/app-frame";
@@ -6,15 +6,18 @@ import { EndpointConsole } from "@/components/endpoint-console";
 import { OnboardingLiveDeployment } from "@/components/onboarding-live-deployment";
 import { StatusBadge } from "@/components/status-badge";
 import { listContextSnippets, listDeployments, listProviderCapabilities } from "@/lib/crucible-data";
+import { listMcpActivity } from "@/lib/crucible-mcp-activity";
 
 export default async function DashboardPage() {
-  const [deployments, providerCapabilities, contextSnippets] = await Promise.all([
+  const [deployments, providerCapabilities, contextSnippets, mcpActivity] = await Promise.all([
     listDeployments(),
     listProviderCapabilities(),
-    listContextSnippets()
+    listContextSnippets(),
+    listMcpActivity()
   ]);
   const readyCount = deployments.filter((deployment) => deployment.status === "ready").length;
   const liveProviders = providerCapabilities.filter((provider) => provider.status === "live").length;
+  const runningRunCount = mcpActivity.runCapsules.filter((run) => run.status === "running").length;
 
   return (
     <AppFrame>
@@ -64,6 +67,70 @@ export default async function DashboardPage() {
                 No live deployments found. Start the AnyGPU gateway or deploy a real model to populate this list.
               </p>
             )}
+          </section>
+
+          <section className="crucible-card">
+            <div className="flex items-center justify-between gap-4">
+              <h2 className="text-lg font-semibold tracking-tight">Deployment history</h2>
+              <span className="text-sm text-muted-foreground">{mcpActivity.deployments.length} events</span>
+            </div>
+            {mcpActivity.deployments.length ? (
+              <div className="mt-4 divide-y divide-border">
+                {mcpActivity.deployments.slice(0, 5).map((deployment) => (
+                  <div key={deployment.id} className="grid gap-2 py-3 text-sm sm:grid-cols-[1fr_7rem_8rem]">
+                    <span>
+                      <span className="font-medium text-foreground">{deployment.id}</span>
+                      <span className="mt-1 block break-all text-muted-foreground">{deployment.endpointUrl}</span>
+                    </span>
+                    <span className="text-muted-foreground">{deployment.provider}</span>
+                    <span className="sm:justify-self-end">
+                      <StatusBadge status={deployment.status} />
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-4 text-sm leading-6 text-muted-foreground">
+                No deployment or test run history yet. Launch a deployment or record a run to populate this feed.
+              </p>
+            )}
+          </section>
+
+          <section className="crucible-card">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <BrainCircuit aria-hidden="true" className="h-4 w-4 text-forge" />
+                <h2 className="text-lg font-semibold tracking-tight">RL and training runs</h2>
+              </div>
+              <span className="text-sm text-muted-foreground">{runningRunCount} running</span>
+            </div>
+            {mcpActivity.runCapsules.length ? (
+              <div className="mt-4 divide-y divide-border">
+                {mcpActivity.runCapsules.slice(0, 5).map((run) => (
+                  <div key={run.id} className="grid gap-2 py-3 text-sm sm:grid-cols-[1fr_7rem_8rem]">
+                    <span>
+                      <span className="font-medium text-foreground">{run.prompt}</span>
+                      <span className="mt-1 block text-muted-foreground">
+                        {run.sourceAgent} · {run.phase ?? "approval gate"} · {run.gpuName ?? run.provider ?? "provider pending"}
+                      </span>
+                    </span>
+                    <span className="text-muted-foreground">
+                      {run.successRate === undefined ? "pending" : `${Math.round(run.successRate * 100)}% success`}
+                    </span>
+                    <span className="sm:justify-self-end">
+                      <StatusBadge status={run.status} />
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-4 text-sm leading-6 text-muted-foreground">
+                No RL or training runs yet. Approved run capsules and training events will appear here once recorded.
+              </p>
+            )}
+            {mcpActivity.errors.length ? (
+              <p className="mt-3 text-xs text-ember">{mcpActivity.errors[0]}</p>
+            ) : null}
           </section>
 
           <EndpointConsole />
