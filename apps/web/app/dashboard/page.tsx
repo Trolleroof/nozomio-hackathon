@@ -1,10 +1,12 @@
-import { ArrowRight, BookOpenText, Rocket, ServerCog } from "lucide-react";
+import type { TrainingRun } from "@crucible/shared/crucible-contract";
+import { Activity, ArrowRight, BookOpenText, BrainCircuit, Rocket, ServerCog } from "lucide-react";
 import Link from "next/link";
 
 import { AppFrame } from "@/components/app-frame";
 import { EndpointConsole } from "@/components/endpoint-console";
 import { StatusBadge } from "@/components/status-badge";
-import { listContextSnippets, listDeployments, listProviderCapabilities } from "@/lib/crucible-data";
+import { listContextSnippets, listDeployments, listProviderCapabilities, listTrainingRuns } from "@/lib/crucible-data";
+import { formatCurrency } from "@/lib/format";
 
 export default async function DashboardPage() {
   const [deployments, providerCapabilities, contextSnippets] = await Promise.all([
@@ -12,8 +14,10 @@ export default async function DashboardPage() {
     listProviderCapabilities(),
     listContextSnippets()
   ]);
+  const trainingRuns = await listTrainingRuns();
   const readyCount = deployments.filter((deployment) => deployment.status === "ready").length;
   const liveProviders = providerCapabilities.filter((provider) => provider.status === "live").length;
+  const runningTrainingRuns = trainingRuns.filter((run) => run.status === "running").length;
 
   return (
     <AppFrame>
@@ -59,6 +63,27 @@ export default async function DashboardPage() {
             ) : (
               <p className="mt-4 text-sm leading-6 text-muted-foreground">
                 No live deployments found. Start the AnyGPU gateway or deploy a real model to populate this list.
+              </p>
+            )}
+          </section>
+
+          <section className="crucible-card">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <BrainCircuit aria-hidden="true" className="h-4 w-4 text-forge" />
+                <h2 className="text-lg font-semibold tracking-tight">RL and training runs</h2>
+              </div>
+              <span className="text-sm text-muted-foreground">{runningTrainingRuns} running</span>
+            </div>
+            {trainingRuns.length ? (
+              <div className="mt-4 space-y-3">
+                {trainingRuns.slice(0, 4).map((run) => (
+                  <TrainingRunRow key={run.id} run={run} />
+                ))}
+              </div>
+            ) : (
+              <p className="mt-4 text-sm leading-6 text-muted-foreground">
+                No RL or training runs yet. Approved run capsules and training events will appear here once recorded.
               </p>
             )}
           </section>
@@ -112,4 +137,81 @@ export default async function DashboardPage() {
       </div>
     </AppFrame>
   );
+}
+
+function TrainingRunRow({ run }: { run: TrainingRun }) {
+  const providerLabel = run.gpuName ? `${run.provider} / ${run.gpuName}` : run.provider;
+  return (
+    <div className="rounded-md border border-border bg-surface-raised p-4 text-sm">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-medium text-foreground">{run.name}</span>
+            <span className="crucible-code px-2 py-1 text-[11px] uppercase tracking-[0.08em] text-muted-foreground">
+              {run.kind}
+            </span>
+          </div>
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-muted-foreground">
+            <span>{providerLabel}</span>
+            <span>{run.phase}</span>
+          </div>
+        </div>
+        <StatusBadge status={run.status} />
+      </div>
+
+      <div className="mt-3 grid gap-2 sm:grid-cols-4">
+        <Metric label="success" value={formatPercent(run.successRate)} />
+        <Metric label="reward" value={formatReward(run.rewardMean)} />
+        <Metric label="rollouts" value={formatRollouts(run.rolloutCount)} />
+        <Metric label="cost" value={formatCost(run.costBurnUsd)} />
+      </div>
+
+      {run.latestEvent ? (
+        <div className="mt-3 flex gap-2 text-sm text-muted-foreground">
+          <Activity aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
+          <span>{run.latestEvent}</span>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border border-border bg-background px-3 py-2">
+      <div className="text-[11px] uppercase tracking-[0.08em] text-muted-foreground">{label}</div>
+      <div className="mt-1 font-medium text-foreground">{value}</div>
+    </div>
+  );
+}
+
+function formatPercent(value?: number) {
+  if (typeof value !== "number") {
+    return "pending";
+  }
+  return `success ${Math.round(value * 100)}%`;
+}
+
+function formatReward(value?: number) {
+  if (typeof value !== "number") {
+    return "reward pending";
+  }
+  return `reward ${value.toFixed(2)}`;
+}
+
+function formatRollouts(value?: number) {
+  if (typeof value !== "number") {
+    return "rollouts pending";
+  }
+  return `${value} rollouts`;
+}
+
+function formatCost(value?: number) {
+  if (typeof value !== "number") {
+    return "cost pending";
+  }
+  if (value > 0 && value < 0.01) {
+    return `cost $${(Math.round(value * 10000) / 10000).toFixed(4)}`;
+  }
+  return `cost ${formatCurrency(value)}`;
 }

@@ -121,3 +121,31 @@ export interface ApiToken {
   createdAt: string;
   lastUsedAt?: string;
 }
+
+export type TrainingRunKind = "rl" | "training" | "fine_tune" | "benchmark";
+
+export type TrainingRunStatus =
+  | "approval_required"
+  | "approved"
+  | "queued"
+  | "running"
+  | "passed"
+  | "failed"
+  | "teardown_verified"
+  | "stopped";
+
+export interface TrainingRun {
+  id: string;
+  name: string;
+  kind: TrainingRunKind;
+  status: TrainingRunStatus;
+  phase: string;
+  provider: string;
+  gpuName?: string;
+  rewardMean?: number;
+  successRate?: number;
+  rolloutCount?: number;
+  costBurnUsd?: number;
+  updatedAt: string;
+  latestEvent?: string;
+}

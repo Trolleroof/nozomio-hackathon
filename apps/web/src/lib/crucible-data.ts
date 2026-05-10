@@ -7,7 +7,10 @@ import type {
   HealthStatus,
   NiaContextSnippet,
   ProviderCapability,
-  ProviderStatus
+  ProviderStatus,
+  TrainingRun,
+  TrainingRunKind,
+  TrainingRunStatus
 } from "@crucible/shared/crucible-contract";
 
 import { hasNiaApiKey, searchNia } from "./nia-server";
@@ -168,6 +171,11 @@ export function listApiTokens(): ApiToken[] {
   ];
 }
 
+export async function listTrainingRuns(): Promise<TrainingRun[]> {
+  const envRuns = parseTrainingRuns(process.env.CRUCIBLE_TRAINING_RUNS_JSON);
+  return envRuns.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+}
+
 async function fetchGatewayModels(): Promise<GatewayModel[]> {
   try {
     const response = await fetch(`${gatewayBaseUrl()}/models`, {
@@ -316,4 +324,79 @@ function tokenPrefix(token: string) {
     return trimmed;
   }
   return `${trimmed.slice(0, 12)}...`;
+}
+
+function parseTrainingRuns(value: string | undefined): TrainingRun[] {
+  if (!value?.trim()) {
+    return [];
+  }
+  try {
+    const parsed = JSON.parse(value);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed.map(normalizeTrainingRun).filter((run): run is TrainingRun => Boolean(run));
+  } catch {
+    return [];
+  }
+}
+
+function normalizeTrainingRun(value: unknown): TrainingRun | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  const record = value as Record<string, unknown>;
+  const id = text(record.id);
+  const name = text(record.name) || text(record.envContractName) || id;
+  if (!id || !name) {
+    return null;
+  }
+  return {
+    id,
+    name,
+    kind: trainingRunKind(record.kind),
+    status: trainingRunStatus(record.status),
+    phase: text(record.phase) || "queued",
+    provider: text(record.provider) || "unassigned",
+    gpuName: text(record.gpuName) || text(record.gpu_name) || undefined,
+    rewardMean: optionalNumber(record.rewardMean ?? record.reward_mean),
+    successRate: optionalNumber(record.successRate ?? record.success_rate),
+    rolloutCount: optionalNumber(record.rolloutCount ?? record.rollout_count),
+    costBurnUsd: optionalNumber(record.costBurnUsd ?? record.cost_burn_usd),
+    updatedAt: text(record.updatedAt) || text(record.updated_at) || new Date().toISOString(),
+    latestEvent: text(record.latestEvent) || text(record.message) || undefined
+  };
+}
+
+function trainingRunKind(value: unknown): TrainingRunKind {
+  const raw = text(value);
+  if (raw === "rl" || raw === "training" || raw === "fine_tune" || raw === "benchmark") {
+    return raw;
+  }
+  return "training";
+}
+
+function trainingRunStatus(value: unknown): TrainingRunStatus {
+  const raw = text(value);
+  if (
+    raw === "approval_required" ||
+    raw === "approved" ||
+    raw === "queued" ||
+    raw === "running" ||
+    raw === "passed" ||
+    raw === "failed" ||
+    raw === "teardown_verified" ||
+    raw === "stopped"
+  ) {
+    return raw;
+  }
+  return "queued";
+}
+
+function text(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function optionalNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
