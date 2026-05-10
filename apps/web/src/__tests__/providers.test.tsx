@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
 
 import ProvidersPage from "../../app/providers/page";
+import { listProviderCapabilities } from "../lib/crucible-data";
 
 describe("ProvidersPage", () => {
   afterEach(() => {
@@ -35,5 +36,19 @@ describe("ProvidersPage", () => {
     expect(screen.getByText("Modal")).toBeInTheDocument();
     expect(screen.getByText("Live")).toBeInTheDocument();
     expect(screen.getByText("Vast.ai")).toBeInTheDocument();
+  });
+
+  it("recognizes the AnyGPU Vast credential alias", async () => {
+    vi.stubEnv("VAST_AI_API_KEY", "");
+    vi.stubEnv("VAST_API_KEY", "");
+    vi.stubEnv("ANYGPU_VAST_API_KEY", "vast-token");
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("gateway unavailable")));
+
+    const providers = await listProviderCapabilities();
+    const vast = providers.find((provider) => provider.provider === "Vast.ai");
+
+    expect(vast?.status).toBe("configured");
+    expect(vast?.supportsDeploy).toBe(true);
+    expect(vast?.lastError).toBeUndefined();
   });
 });

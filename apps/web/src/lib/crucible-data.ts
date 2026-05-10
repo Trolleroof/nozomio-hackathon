@@ -54,7 +54,7 @@ const providerDefinitions: ProviderDefinition[] = [
   {
     provider: "Vast.ai",
     adapter: "vast",
-    env: ["VAST_AI_API_KEY", "VAST_API_KEY"],
+    env: ["VAST_AI_API_KEY", "VAST_API_KEY", "ANYGPU_VAST_API_KEY"],
     supportsOpenAIEndpoint: true,
     notes: "Requires a Vast.ai API key before Crucible can launch marketplace instances."
   },
